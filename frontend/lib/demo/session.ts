@@ -107,6 +107,16 @@ class DemoBuilder {
     return this;
   }
 
+  /**
+   * Paste text at a position: the content appears at once rather than being
+   * typed, which is what makes a paste read as a paste.
+   */
+  paste(path: string, content: string, offset?: number): this {
+    this.push({ timestamp: this.t, action: 'insert', file: path, content, offset });
+    this.advance(420);
+    return this;
+  }
+
   typeText(path: string, content: string, profile: TypingProfile = FAST): this {
     this.push({ timestamp: this.t, action: 'type', file: path, content, profile });
     this.advance(300);
@@ -497,6 +507,24 @@ export function createDemoSession(): SessionEvent[] {
   b.createFile('src/store.ts');
   b.typeFile('src/store.ts', STORE_TS, { perLineMs: 400 });
 
+  // The agent starts a helper function the wrong way, notices, backspaces and
+  // rewrites it. This is the kind of thing a screen recording captures and a
+  // diff never shows.
+  b.think(1500, 'That comparator is more complicated than it needs to be. Let me simplify it.');
+  b.narrate('Simplifying the comparator — backspacing and rewriting the line.');
+  const comparatorOffset = STORE_TS.indexOf(
+    '  return [...tasks.values()].sort((a, b) =>\n    a.createdAt.localeCompare(b.createdAt),\n  );',
+  );
+  b.focus('src/store.ts');
+  b.select('src/store.ts', comparatorOffset, 84);
+  b.advance(400);
+  b.backspace('src/store.ts', 84, comparatorOffset);
+  b.paste(
+    'src/store.ts',
+    '  return [...tasks.values()].sort((a, b) =>\n    a.createdAt.localeCompare(b.createdAt),\n  );',
+    comparatorOffset,
+  );
+
   /* -------------------------------------------------------------- validate */
   b.narrate('Adding validation with zod, so invalid payloads are rejected before they touch the store.');
   b.createFile('src/validate.ts');
@@ -515,6 +543,17 @@ export function createDemoSession(): SessionEvent[] {
   b.narrate('Wiring the routes: list, create, complete and delete.');
   b.createFile('src/routes.ts');
   b.typeFile('src/routes.ts', ROUTES_TS, { perLineMs: 420 });
+
+  // The agent copies the error-handling shape it wrote in the store and
+  // pastes it into the route handler.
+  b.narrate('Reusing the error handling pattern from the store in the route handler.');
+  b.focus('src/routes.ts');
+  b.select('src/store.ts', 0, 0);
+  b.paste(
+    'src/routes.ts',
+    '      const input = parseTaskInput(req.body);\n      res.status(201).json(createTask(input));',
+    ROUTES_TS.indexOf('      const input = parseTaskInput(req.body);\n      res.status(201).json(createTask(input));'),
+  );
 
   b.createFile('src/server.ts');
   b.typeFile('src/server.ts', SERVER_TS, { perLineMs: 400 });

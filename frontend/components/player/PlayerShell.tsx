@@ -100,6 +100,11 @@ function PlayerShellInner({
 
   usePlaybackPersistence(storageKey ?? 'codecinema:position', Boolean(storageKey));
 
+  // Live mode: the clock waits at the edge of the stream for more events.
+  useEffect(() => {
+    engine.setLiveMode(live);
+  }, [engine, live]);
+
   // Expose the engine for debugging and for the video-export renderer.
   useEffect(() => {
     if (typeof window === 'undefined') return;

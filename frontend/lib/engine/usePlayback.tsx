@@ -31,6 +31,53 @@ import {
 
 const PlaybackContext = createContext<PlaybackEngine | null>(null);
 
+/**
+ * Default equality for a selected slice of engine state.
+ *
+ * `Object.is` alone is not enough: a selector that builds a fresh object or
+ * array (`s => ({ active: s.active })`) would return a new reference on every
+ * call, and `useSyncExternalStore` would then re-render forever. Shallow
+ * comparison keeps the snapshot stable when the *contents* are unchanged.
+ */
+function shallowEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (!Object.is(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  if (
+    a !== null &&
+    b !== null &&
+    typeof a === 'object' &&
+    typeof b === 'object' &&
+    !Array.isArray(a) &&
+    !Array.isArray(b)
+  ) {
+    const keysA = Object.keys(a as Record<string, unknown>);
+    const keysB = Object.keys(b as Record<string, unknown>);
+    if (keysA.length !== keysB.length) return false;
+    for (const key of keysA) {
+      if (
+        !Object.is(
+          (a as Record<string, unknown>)[key],
+          (b as Record<string, unknown>)[key],
+        )
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
+/** Stable identity — a default parameter would create a new function on every
+ * render and force `useSyncExternalStore` to re-subscribe. */
+const DEFAULT_IS_EQUAL = shallowEqual;
+
 export function PlaybackProvider({
   engine,
   children,
@@ -55,7 +102,7 @@ export function useEngine(): PlaybackEngine {
  */
 export function useEngineState<T>(
   selector: (state: EngineState) => T,
-  isEqual: (a: T, b: T) => boolean = Object.is,
+  isEqual: (a: T, b: T) => boolean = DEFAULT_IS_EQUAL,
 ): T {
   const engine = useEngine();
   const cache = useRef<{ value: T; primed: boolean }>({
@@ -84,13 +131,15 @@ export function useEngineState<T>(
  */
 export function useSessionOverview(): SessionOverview | null {
   const engine = useEngine();
-  const [overview, setOverview] = useState<SessionOverview | null>(
-    engine.isOverviewReady() ? engine.getOverview() : null,
-  );
+  // Reading the version during render means a session swap re-runs the effect
+  // below, which is what stops the panels from showing the previous
+  // session's timeline and architecture.
+  const version = engine.getSessionVersion();
+  const [overview, setOverview] = useState<SessionOverview | null>(null);
 
   useEffect(() => {
-    if (overview) return;
     let cancelled = false;
+    setOverview(engine.isOverviewReady() ? engine.getOverview() : null);
     const check = () => {
       if (cancelled) return;
       if (engine.isOverviewReady()) setOverview(engine.getOverview());
@@ -101,7 +150,7 @@ export function useSessionOverview(): SessionOverview | null {
       cancelled = true;
       unsubscribe();
     };
-  }, [engine, overview]);
+  }, [engine, version]);
 
   return overview;
 }
@@ -109,7 +158,7 @@ export function useSessionOverview(): SessionOverview | null {
 /** Subscribe to the per-frame display channel. */
 export function useEngineDisplay<T>(
   selector: (display: EngineDisplay) => T,
-  isEqual: (a: T, b: T) => boolean = Object.is,
+  isEqual: (a: T, b: T) => boolean = DEFAULT_IS_EQUAL,
 ): T {
   const engine = useEngine();
   const cache = useRef<{ value: T; primed: boolean }>({

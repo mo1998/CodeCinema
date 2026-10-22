@@ -23,23 +23,27 @@ export const DEFAULT_PROFILE: Required<TypingProfile> = {
   keywordPauseMs: 320,
 };
 
+/**
+ * Keywords that introduce a *block*.
+ *
+ * These are the places a human hesitates before committing to a structure.
+ * Ordinary statements (`const`, `let`, `import`) are excluded on purpose:
+ * pausing 320ms before every `const` would make ordinary code look broken.
+ */
 const KEYWORDS = [
   'def ',
   'class ',
   'function ',
   'async function ',
-  'const ',
-  'let ',
-  'var ',
-  'import ',
-  'from ',
-  'export ',
   'interface ',
   'type ',
   'struct ',
   'impl ',
   'fn ',
   'pub fn ',
+  'enum ',
+  'trait ',
+  'impl ',
 ];
 
 const BLOCK_OPENERS = new Set(['{', '(', '[']);
@@ -97,23 +101,32 @@ export function humanizeChunk(
 
   // Pre-compute keyword pause positions: the index of the first character of a
   // block keyword that starts a line.
+  //
+  // The line state is tracked incrementally. Slicing the line prefix for every
+  // character would be O(lineLength²) — a 200 KB single-line paste (a
+  // minified bundle) would stall the main thread for seconds.
   const keywordPauses = new Map<number, number>();
+  let lineStart = 0;
+  let lineBlank = true;
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
-    if (ch !== '\n' && ch !== ' ' && ch !== '\t') {
-      // Only consider keywords at the beginning of a line.
-      const lineStart = text.lastIndexOf('\n', i - 1) + 1;
-      const prefix = text.slice(lineStart, i);
-      if (prefix.trim().length === 0) {
-        for (const kw of KEYWORDS) {
-          if (text.startsWith(kw, i)) {
-            keywordPauses.set(i, p.keywordPauseMs);
-            break;
-          }
+    if (ch === '\n') {
+      lineStart = i + 1;
+      lineBlank = true;
+      continue;
+    }
+    if (ch === ' ' || ch === '\t') continue;
+    if (lineBlank) {
+      lineBlank = false;
+      for (const kw of KEYWORDS) {
+        if (text.startsWith(kw, i)) {
+          keywordPauses.set(i, p.keywordPauseMs);
+          break;
         }
       }
     }
   }
+  void lineStart;
 
   let inIndent = false;
   let pendingIndent = 0;
@@ -196,6 +209,41 @@ export function uniformDelays(
     delays[i] = Math.max(0, Math.round(base * (lo + rng() * (hi - lo))));
   }
   return delays;
+}
+
+/**
+ * Scale a delay table so that it sums to `targetMs`.
+ *
+ * The playback engine uses this to fit a chunk's typing into the window the
+ * recording actually left for it. Without it, a 400-character chunk recorded
+ * in one second would animate for fifty-three seconds and would still be
+ * mid-sentence when the next event arrived.
+ *
+ * Every delay stays at least 1ms so the reveal remains strictly monotonic.
+ */
+export function scaleDelays(delays: number[], targetMs: number): number[] {
+  let total = 0;
+  for (const delay of delays) total += delay;
+  if (total <= 0 || targetMs <= 0) return delays.slice();
+
+  const ratio = targetMs / total;
+  const scaled = new Array<number>(delays.length);
+  let accumulated = 0;
+  for (let i = 0; i < delays.length; i++) {
+    const value = Math.max(1, Math.round(delays[i] * ratio));
+    scaled[i] = value;
+    accumulated += value;
+  }
+  // Push any rounding drift onto the longest delay so the total matches.
+  const drift = targetMs - accumulated;
+  if (drift !== 0 && scaled.length > 0) {
+    let longest = 0;
+    for (let i = 1; i < scaled.length; i++) {
+      if (scaled[i] > scaled[longest]) longest = i;
+    }
+    scaled[longest] = Math.max(1, scaled[longest] + drift);
+  }
+  return scaled;
 }
 
 /**

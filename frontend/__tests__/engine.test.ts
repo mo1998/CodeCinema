@@ -115,8 +115,8 @@ describe('PlaybackEngine', () => {
 
     expect(seeking.getState().consumedEvents).toBe(forward.getState().consumedEvents);
     expect(seeking.getState().fileOrder).toEqual(forward.getState().fileOrder);
-    expect(seeking.getState().timeline.length).toBe(
-      forward.getState().timeline.length,
+    expect(seeking.getOverview().timeline.length).toBe(
+      forward.getOverview().timeline.length,
     );
   });
 

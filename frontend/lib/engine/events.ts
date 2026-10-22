@@ -172,7 +172,7 @@ export function isAction<K extends EventAction>(
   return event.action === action;
 }
 
-export const NARration_CATEGORIES: NarrationCategory[] = [
+export const NARRATION_CATEGORIES: NarrationCategory[] = [
   'explanation',
   'decision',
   'warning',

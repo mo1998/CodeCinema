@@ -254,23 +254,31 @@ export class SessionState {
           this.touchedFiles.push(path);
           this.createdFiles.push(path);
         }
-        this.files.set(path, {
-          path,
-          buffer: PieceTable.fromString(''),
-          language: event.language ?? detectLanguage(path),
-          createdAt: ts,
-          lastModifiedAt: ts,
-          cursor: 0,
-          selection: null,
-          scrollTop: 0,
-          revision: 0,
-        });
+        const content = typeof event.content === 'string' ? event.content : undefined;
+        const existing = this.files.get(path);
+        if (existing) {
+          // Creating a file that already exists must not discard its
+          // contents; only the metadata is refreshed.
+          existing.language = event.language ?? existing.language;
+          existing.lastModifiedAt = ts;
+        } else {
+          this.files.set(path, {
+            path,
+            buffer: PieceTable.fromString(''),
+            language: event.language ?? detectLanguage(path),
+            createdAt: ts,
+            lastModifiedAt: ts,
+            cursor: 0,
+            selection: null,
+            scrollTop: 0,
+            revision: 0,
+          });
+        }
         // Creating a file opens it — that is what an IDE does, and it is what
         // the viewer expects to see.
         if (!this.tabs.includes(path)) this.tabs.push(path);
         this.activeFile = path;
         // An explicit content payload creates the file pre-filled.
-        const content = typeof event.content === 'string' ? event.content : undefined;
         if (content) {
           const rec = this.files.get(path)!;
           rec.buffer.setText(content);
@@ -298,7 +306,10 @@ export class SessionState {
           rec.language = detectLanguage(to);
           this.files.set(to, rec);
           this.fileOrder = this.fileOrder.map((p) => (p === from ? to : p));
-          this.tabs = this.tabs.map((t) => (t === from ? to : t));
+          // Deduplicate: renaming onto an already-open file would otherwise
+          // show the same file twice in the tab bar.
+          const renamed = this.tabs.map((t) => (t === from ? to : t));
+          this.tabs = [...new Set(renamed)];
           if (this.activeFile === from) this.activeFile = to;
         }
         break;
@@ -306,7 +317,8 @@ export class SessionState {
       case 'type':
       case 'insert': {
         const rec = this.ensureFile(event.file, ts);
-        const offset = event.offset ?? rec.buffer.length;
+        const length = rec.buffer.length;
+        const offset = Math.max(0, Math.min(event.offset ?? length, length));
         rec.buffer.splice(offset, 0, event.content);
         rec.cursor = offset + event.content.length;
         rec.selection = null;
@@ -317,7 +329,11 @@ export class SessionState {
       case 'delete': {
         const rec = this.files.get(event.file);
         if (!rec) break;
-        const offset = event.offset ?? Math.max(0, rec.buffer.length - event.count);
+        const length = rec.buffer.length;
+        const offset = Math.max(
+          0,
+          Math.min(event.offset ?? Math.max(0, length - event.count), length),
+        );
         rec.buffer.delete(offset, event.count);
         rec.cursor = offset;
         rec.selection = null;
@@ -327,8 +343,10 @@ export class SessionState {
       }
       case 'replace': {
         const rec = this.ensureFile(event.file, ts);
-        rec.buffer.splice(event.offset, event.count, event.content);
-        rec.cursor = event.offset + event.content.length;
+        const length = rec.buffer.length;
+        const offset = Math.max(0, Math.min(event.offset, length));
+        rec.buffer.splice(offset, event.count, event.content);
+        rec.cursor = offset + event.content.length;
         rec.selection = null;
         rec.lastModifiedAt = ts;
         rec.revision += 1;
@@ -528,8 +546,10 @@ export class SessionState {
       streamed,
     });
     // Keep the terminal bounded; a runaway `tail -f` should not eat the heap.
+    // Trimming in batches avoids an O(n) splice on every single push.
     const MAX_LINES = 2000;
-    if (this.terminal.lines.length > MAX_LINES) {
+    const TRIM_BATCH = 256;
+    if (this.terminal.lines.length > MAX_LINES + TRIM_BATCH) {
       this.terminal.lines.splice(0, this.terminal.lines.length - MAX_LINES);
     }
   }

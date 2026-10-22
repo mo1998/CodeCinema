@@ -32,6 +32,7 @@ import {
   hashString,
   humanizeChunk,
   revealedCountAt,
+  scaleDelays,
   uniformDelays,
 } from './humanize';
 
@@ -63,7 +64,11 @@ export interface EngineState {
   createdFiles: string[];
   languages: Record<string, string>;
   terminalOpen: boolean;
-  timeline: TimelineEntry[];
+  /**
+   * The event timeline lives in `getOverview()` — it is derived from the
+   * whole session, not from the applied prefix, and copying it on every
+   * revision change would be expensive for long sessions.
+   */
   narration: NarrationEntry[];
   build: BuildRecord;
   dependencies: DependencyRecord[];
@@ -160,6 +165,17 @@ export class PlaybackEngine {
   private onError?: (error: unknown) => void;
 
   private checkpoints: Checkpoint[] = [];
+  /** Approximate total size of the retained checkpoints, in bytes. */
+  private checkpointBytes = 0;
+  /** Upper bound on checkpoint memory. */
+  private maxCheckpointBytes = 64 * 1024 * 1024;
+  /** Bumped whenever the event stream is replaced. */
+  private generation = 0;
+  /** Live mode: the clock waits at the edge for more events. */
+  private live = false;
+  /** True when the viewer explicitly paused (as opposed to reaching the end). */
+  private userPaused = false;
+  private sessionVersion = 0;
   private contentMask: ContentMask | null = null;
   private terminalMask: TerminalMask | null = null;
   private thinkingUntil: number | null = null;
@@ -227,6 +243,11 @@ export class PlaybackEngine {
     const previousTime = this.time;
     const wasPlaying = this.playing;
 
+    this.stopLoop();
+    this.playing = false;
+    this.status = 'idle';
+    this.generation += 1;
+    this.sessionVersion += 1;
     this.events = [...events].sort(
       (a, b) => a.timestamp - b.timestamp || (a.seq ?? 0) - (b.seq ?? 0),
     );
@@ -239,6 +260,7 @@ export class PlaybackEngine {
     this.thinkingUntil = null;
     this.focusedFileOverride = null;
     this.checkpoints = [];
+    this.checkpointBytes = 0;
     this.documentCache.clear();
     this.terminalCache = null;
     this.overviewCache = null;
@@ -266,8 +288,11 @@ export class PlaybackEngine {
   appendEvents(newEvents: SessionEvent[]): void {
     if (newEvents.length === 0) return;
     const atLiveEdge =
-      this.eventIndex >= this.events.length || this.time >= this.durationMs - 1;
-    this.events.push(...newEvents);
+      this.live ||
+      this.eventIndex >= this.events.length ||
+      this.time >= this.durationMs - 1;
+    // `push(...arr)` overflows the argument stack for very large batches.
+    for (const event of newEvents) this.events.push(event);
     this.events.sort((a, b) => a.timestamp - b.timestamp || (a.seq ?? 0) - (b.seq ?? 0));
     this.durationMs = Math.max(this.durationMs, this.computeDuration());
     this.state = this.buildState();
@@ -276,7 +301,11 @@ export class PlaybackEngine {
     this.overviewReady = false;
     this.notifyState();
     if (atLiveEdge && this.playing) {
-      this.seek(this.durationMs);
+      // Follow the live edge instead of ending the session.
+      this.advanceTo(this.durationMs);
+      this.time = this.durationMs;
+      this.stateDirty = true;
+      this.flushState();
     }
   }
 
@@ -284,7 +313,13 @@ export class PlaybackEngine {
     return this.events;
   }
 
+  /** A counter that changes whenever the event stream is replaced. */
+  getSessionVersion(): number {
+    return this.sessionVersion;
+  }
+
   destroy(): void {
+    this.generation += 1;
     this.stopLoop();
     this.stateListeners.clear();
     this.displayListeners.clear();
@@ -296,6 +331,7 @@ export class PlaybackEngine {
     if (this.playing) return;
     if (this.time >= this.durationMs) this.seek(0);
     this.playing = true;
+    this.userPaused = false;
     this.status = this.time >= this.durationMs ? 'ended' : 'playing';
     this.lastWallTime = now();
     this.state = this.buildState();
@@ -306,6 +342,7 @@ export class PlaybackEngine {
   pause(): void {
     if (!this.playing) return;
     this.playing = false;
+    this.userPaused = true;
     this.status = this.time >= this.durationMs ? 'ended' : 'paused';
     this.stopLoop();
     this.state = this.buildState();
@@ -316,6 +353,21 @@ export class PlaybackEngine {
   toggle(): void {
     if (this.playing) this.pause();
     else this.play();
+  }
+
+  /**
+   * Live mode.
+   *
+   * The clock stops at the end of the known events and waits for more,
+   * instead of ending the session. A live recording has no end until the
+   * agent stops.
+   */
+  setLiveMode(enabled: boolean): void {
+    this.live = enabled;
+  }
+
+  isLive(): boolean {
+    return this.live;
   }
 
   setSpeed(speed: number): void {
@@ -351,6 +403,7 @@ export class PlaybackEngine {
     this.time = target;
     if (this.durationMs > 0 && target >= this.durationMs) {
       this.status = 'ended';
+      this.completePending();
     } else if (this.status === 'ended') {
       this.status = 'paused';
     }
@@ -364,7 +417,12 @@ export class PlaybackEngine {
 
   /** Jump to the next significant event (timeline entry). */
   stepForward(): void {
-    const timeline = this.getOverview().timeline;
+    // The reducer's timeline only knows about the applied prefix; the
+    // overview knows about the whole session but costs a full fold to
+    // compute. Prefer whichever is already available.
+    const timeline = this.overviewReady
+      ? this.getOverview().timeline
+      : this.reducer.timeline;
     for (const entry of timeline) {
       if (entry.timestamp > this.time + 1) {
         this.seek(entry.timestamp);
@@ -375,7 +433,9 @@ export class PlaybackEngine {
 
   /** Jump to the previous significant event. */
   stepBackward(): void {
-    const timeline = this.getOverview().timeline;
+    const timeline = this.overviewReady
+      ? this.getOverview().timeline
+      : this.reducer.timeline;
     let previous: number | null = null;
     for (const entry of timeline) {
       if (entry.timestamp < this.time - 1) previous = entry.timestamp;
@@ -528,10 +588,17 @@ export class PlaybackEngine {
       if (target >= this.durationMs) {
         this.advanceTo(this.durationMs);
         this.time = this.durationMs;
-        this.playing = false;
-        this.status = 'ended';
-        this.state = this.buildState();
-        this.notifyState();
+        if (this.live) {
+          // More events may still arrive — park at the edge and wait.
+          this.stateDirty = true;
+          this.flushState();
+        } else {
+          this.completePending();
+          this.playing = false;
+          this.status = 'ended';
+          this.state = this.buildState();
+          this.notifyState();
+        }
       } else {
         this.advanceTo(target);
         this.time = target;
@@ -554,6 +621,17 @@ export class PlaybackEngine {
     this.stateVersion += 1;
     this.state = { ...this.buildState(), version: this.stateVersion };
     for (const listener of this.stateListeners) listener(this.state);
+  }
+
+  /**
+   * Flush any in-flight animation.
+   *
+   * At the end of a session every edit must be visible in its final state —
+   * otherwise the viewer stops one keystroke short of the finished file.
+   */
+  private completePending(): void {
+    this.contentMask = null;
+    this.terminalMask = null;
   }
 
   private advanceTo(target: number): void {
@@ -581,6 +659,10 @@ export class PlaybackEngine {
     }
     this.contentMask = null;
     this.terminalMask = null;
+    // `thinkingUntil` is engine state that is not part of the snapshot, so it
+    // has to be cleared explicitly or the "Thinking…" badge survives a rewind
+    // to before the think event.
+    this.thinkingUntil = null;
     this.documentCache.clear();
     this.advanceTo(target);
   }
@@ -588,7 +670,9 @@ export class PlaybackEngine {
   private findCheckpoint(target: number): Checkpoint | null {
     let best: Checkpoint | null = null;
     for (const checkpoint of this.checkpoints) {
-      const event = this.events[checkpoint.eventIndex];
+      // `eventIndex` is the count of events already applied, so the last
+      // applied event is at `eventIndex - 1`.
+      const event = this.events[checkpoint.eventIndex - 1];
       if (!event) break;
       if (event.timestamp <= target) best = checkpoint;
       else break;
@@ -604,7 +688,10 @@ export class PlaybackEngine {
     if (MUTATING_ACTIONS.has(event.action)) {
       this.contentMask = null;
     }
-    this.terminalMask = null;
+    // The terminal mask only dies when a *new* terminal line is produced.
+    // Clearing it on every event would make a command appear instantly
+    // whenever something else happened 50ms later.
+    const terminalLinesBefore = this.reducer.terminal.lines.length;
 
     // Capture pre-edit text for erase animations before the reducer mutates it.
     let eraseOriginal: string | undefined;
@@ -612,7 +699,11 @@ export class PlaybackEngine {
     if (event.action === 'delete') {
       const rec = this.reducer.files.get(event.file);
       if (rec) {
-        eraseOffset = event.offset ?? Math.max(0, rec.buffer.length - event.count);
+        const length = rec.buffer.length;
+        eraseOffset = Math.max(
+          0,
+          Math.min(event.offset ?? Math.max(0, length - event.count), length),
+        );
         eraseOriginal = rec.buffer.slice(eraseOffset, event.count);
       }
     }
@@ -620,13 +711,19 @@ export class PlaybackEngine {
     let typeContent = '';
     if (event.action === 'type') {
       const rec = this.reducer.files.get(event.file);
-      typeOffset = event.offset ?? (rec ? rec.buffer.length : 0);
+      const length = rec ? rec.buffer.length : 0;
+      // The reducer clamps the insert to the end of the file; the mask must
+      // use the same offset or it will reveal characters twice.
+      typeOffset = Math.max(0, Math.min(event.offset ?? length, length));
       typeContent = event.content;
     }
 
     this.reducer.apply(event, index);
     this.terminalCache = null;
     if (event.action === 'focus') this.focusedFileOverride = null;
+    if (this.reducer.terminal.lines.length !== terminalLinesBefore) {
+      this.terminalMask = null;
+    }
 
     // Plan the animation for this event.
     const window = next ? next.timestamp - event.timestamp : Infinity;
@@ -644,7 +741,9 @@ export class PlaybackEngine {
         offset: typeOffset,
         length: typeContent.length,
         content: typeContent,
-        delays,
+        // The delay table is scaled to the window the recording left, so the
+        // chunk is always fully typed before the next event is applied.
+        delays: scaleDelays(delays, duration),
         startedAt: event.timestamp,
         endsAt: event.timestamp + duration,
       };
@@ -659,9 +758,12 @@ export class PlaybackEngine {
         kind: 'erase',
         path: event.file,
         offset: eraseOffset,
-        length: event.count,
+        // The animated region is the text that actually existed, not the
+        // requested count — a delete beyond the end of the file must not
+        // leave phantom characters on screen forever.
+        length: eraseOriginal.length,
         original: eraseOriginal,
-        delays,
+        delays: scaleDelays(delays, duration),
         startedAt: event.timestamp,
         endsAt: event.timestamp + duration,
       };
@@ -688,7 +790,7 @@ export class PlaybackEngine {
         const duration = fitDuration(total, window);
         this.terminalMask = {
           lineId: line.id,
-          delays,
+          delays: scaleDelays(delays, duration),
           startedAt: event.timestamp,
           endsAt: event.timestamp + duration,
         };
@@ -709,15 +811,50 @@ export class PlaybackEngine {
     return Math.max(200, Math.ceil(this.events.length / this.maxCheckpoints));
   }
 
+  /**
+   * Approximate the memory a snapshot occupies.
+   *
+   * Checkpoints hold the full text of every file, so the *number* of
+   * checkpoints is not a sufficient bound — a 2 MB session with 192
+   * checkpoints is 384 MB of duplicated text. The budget is measured in bytes.
+   */
+  private estimateSnapshotBytes(snapshot: StateSnapshot): number {
+    let bytes = 0;
+    for (const file of snapshot.files) bytes += file.text.length * 2 + 160;
+    bytes += snapshot.terminal.lines.length * 96;
+    bytes += snapshot.narration.length * 160;
+    bytes += snapshot.timeline.length * 160;
+    bytes += (snapshot.errors.length + snapshot.fixes.length) * 160;
+    bytes += snapshot.dependencies.length * 96;
+    return bytes;
+  }
+
+  /** Drop every other checkpoint, keeping the first and the last. */
+  private thinCheckpoints(): void {
+    const kept: Checkpoint[] = [];
+    let bytes = 0;
+    for (let i = 0; i < this.checkpoints.length; i++) {
+      const isKeep = i === 0 || i % 2 === 1 || i === this.checkpoints.length - 1;
+      if (!isKeep) continue;
+      kept.push(this.checkpoints[i]);
+      bytes += this.estimateSnapshotBytes(this.checkpoints[i].snapshot);
+    }
+    this.checkpoints = kept;
+    this.checkpointBytes = bytes;
+  }
+
   private pushCheckpoint(eventIndex: number): void {
-    this.checkpoints.push({ eventIndex, snapshot: this.reducer.snapshot() });
-    if (this.checkpoints.length > this.maxCheckpoints + 8) {
-      // Drop every other checkpoint, keeping the newest, to bound memory.
-      const kept: Checkpoint[] = [];
-      for (let i = 0; i < this.checkpoints.length; i++) {
-        if (i % 2 === 1 || i === this.checkpoints.length - 1) kept.push(this.checkpoints[i]);
-      }
-      this.checkpoints = kept;
+    const snapshot = this.reducer.snapshot();
+    this.checkpoints.push({ eventIndex, snapshot });
+    this.checkpointBytes += this.estimateSnapshotBytes(snapshot);
+
+    if (
+      this.checkpoints.length > this.maxCheckpoints + 8 ||
+      this.checkpointBytes > this.maxCheckpointBytes
+    ) {
+      // Drop every other checkpoint, keeping the newest and the empty
+      // session-start one, to bound memory.
+      this.thinCheckpoints();
     }
   }
 
@@ -728,23 +865,52 @@ export class PlaybackEngine {
       onDone?.();
       return;
     }
+    // Capture the generation and the event array. Reading `this.events` from
+    // the background loop while another session is being loaded would fold
+    // two sessions into one set of checkpoints.
+    const generation = this.generation;
+    const events = this.events;
     const interval = this.checkpointInterval();
     const scratch = new SessionState();
     const checkpoints: Checkpoint[] = [{ eventIndex: 0, snapshot: scratch.snapshot() }];
+    let bytes = this.estimateSnapshotBytes(checkpoints[0].snapshot);
     let index = 0;
+
     const chunk = () => {
+      if (generation !== this.generation) return; // superseded — abort
       const start = performance.now();
-      while (index < this.events.length && performance.now() - start < 8) {
-        scratch.apply(this.events[index], index);
+      while (index < events.length && performance.now() - start < 8) {
+        scratch.apply(events[index], index);
         index += 1;
         if (index % interval === 0) {
-          checkpoints.push({ eventIndex: index, snapshot: scratch.snapshot() });
+          const snapshot = scratch.snapshot();
+          checkpoints.push({ eventIndex: index, snapshot });
+          bytes += this.estimateSnapshotBytes(snapshot);
+          if (
+            checkpoints.length > this.maxCheckpoints + 8 ||
+            bytes > this.maxCheckpointBytes
+          ) {
+            // Thin the list in place, keeping the first and the last.
+            const kept: Checkpoint[] = [];
+            let keptBytes = 0;
+            for (let i = 0; i < checkpoints.length; i++) {
+              const isKeep = i === 0 || i % 2 === 1 || i === checkpoints.length - 1;
+              if (!isKeep) continue;
+              kept.push(checkpoints[i]);
+              keptBytes += this.estimateSnapshotBytes(checkpoints[i].snapshot);
+            }
+            checkpoints.length = 0;
+            checkpoints.push(...kept);
+            bytes = keptBytes;
+          }
         }
       }
-      if (index < this.events.length) {
+      if (index < events.length) {
         setTimeout(chunk, 0);
       } else {
+        if (generation !== this.generation) return;
         this.checkpoints = checkpoints;
+        this.checkpointBytes = bytes;
         // The overview is derived from the same fold; reuse it so the first
         // "step to next event" is instant.
         this.foldedState = scratch;
@@ -904,9 +1070,6 @@ export class PlaybackEngine {
       createdFiles: this.cachedCreatedFiles,
       languages,
       terminalOpen: this.reducer.terminal.open,
-      // The timeline is append-only and potentially large; consumers that
-      // need it use `getOverview()` instead, which is computed once.
-      timeline: this.reducer.timeline,
       narration: this.cachedNarration,
       build: this.reducer.build,
       dependencies: this.cachedDependencies,
