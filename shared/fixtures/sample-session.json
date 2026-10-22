@@ -1,0 +1,117 @@
+[
+  {
+    "timestamp": 0,
+    "action": "session.start",
+    "title": "Sample session",
+    "agent": "claude-code",
+    "prompt": "Add a health endpoint"
+  },
+  {
+    "timestamp": 400,
+    "action": "think",
+    "duration": 1200,
+    "thought": "A health endpoint is the smallest useful addition."
+  },
+  {
+    "timestamp": 400,
+    "action": "narrate",
+    "text": "Creating a health endpoint so the service can report liveness.",
+    "category": "explanation"
+  },
+  {
+    "timestamp": 900,
+    "action": "file.create",
+    "file": "src/health.py",
+    "language": "python"
+  },
+  {
+    "timestamp": 1100,
+    "action": "type",
+    "file": "src/health.py",
+    "content": "def health():\n"
+  },
+  {
+    "timestamp": 1600,
+    "action": "type",
+    "file": "src/health.py",
+    "content": "    return {\"status\": \"ok\"}\n"
+  },
+  {
+    "timestamp": 2200,
+    "action": "focus",
+    "file": "src/health.py"
+  },
+  {
+    "timestamp": 2600,
+    "action": "terminal.command",
+    "command": "pytest -q"
+  },
+  {
+    "timestamp": 3200,
+    "action": "terminal.write",
+    "text": "1 failed, 4 passed"
+  },
+  {
+    "timestamp": 3600,
+    "action": "terminal.exit",
+    "exitCode": 1
+  },
+  {
+    "timestamp": 3900,
+    "action": "error",
+    "message": "AssertionError: expected 200, got 404",
+    "file": "tests/test_health.py",
+    "line": 12
+  },
+  {
+    "timestamp": 4300,
+    "action": "select",
+    "file": "src/health.py",
+    "offset": 0,
+    "length": 12
+  },
+  {
+    "timestamp": 4700,
+    "action": "replace",
+    "file": "src/health.py",
+    "offset": 0,
+    "count": 13,
+    "content": "def health() -> dict[str, str]:"
+  },
+  {
+    "timestamp": 5200,
+    "action": "fix",
+    "message": "Added the missing return type annotation.",
+    "file": "src/health.py"
+  },
+  {
+    "timestamp": 5600,
+    "action": "build.start",
+    "target": "pytest"
+  },
+  {
+    "timestamp": 6100,
+    "action": "terminal.command",
+    "command": "pytest -q"
+  },
+  {
+    "timestamp": 6700,
+    "action": "terminal.write",
+    "text": "5 passed"
+  },
+  {
+    "timestamp": 7000,
+    "action": "terminal.exit",
+    "exitCode": 0
+  },
+  {
+    "timestamp": 7200,
+    "action": "build.success",
+    "durationMs": 1600
+  },
+  {
+    "timestamp": 7600,
+    "action": "session.end",
+    "summary": "Health endpoint added and verified."
+  }
+]

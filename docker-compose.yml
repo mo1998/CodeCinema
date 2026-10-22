@@ -1,0 +1,111 @@
+# CodeCinema — full stack for local development and self-hosting.
+#
+#   docker compose up --build
+#
+#   web        http://localhost:3000
+#   api        http://localhost:8000/docs
+#   postgres   localhost:5432
+#   redis      localhost:6379
+#
+# The export worker is a separate process consuming a Redis queue so that a
+# long video render never blocks an API request.
+
+name: codecinema
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-codecinema}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-codecinema}
+      POSTGRES_DB: ${POSTGRES_DB:-codecinema}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-codecinema} -d ${POSTGRES_DB:-codecinema}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-codecinema}:${POSTGRES_PASSWORD:-codecinema}@postgres:5432/${POSTGRES_DB:-codecinema}
+      REDIS_URL: redis://redis:6379/0
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      STORAGE_DIR: /data
+    volumes:
+      - export-data:/data
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/v1/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-codecinema}:${POSTGRES_PASSWORD:-codecinema}@postgres:5432/${POSTGRES_DB:-codecinema}
+      REDIS_URL: redis://redis:6379/0
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
+      STORAGE_DIR: /data
+    volumes:
+      - export-data:/data
+    command: ["python", "-m", "app.export.worker"]
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+
+volumes:
+  postgres-data:
+  redis-data:
+  export-data:

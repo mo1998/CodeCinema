@@ -1,0 +1,245 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codecinema.dev/schemas/event.schema.json",
+  "title": "CodeCinema Session Event",
+  "description": "Canonical, append-only event record for a recorded AI coding session. Every adapter (OpenCode, Claude Code, Cursor, Gemini CLI, Aider, Cline, Roo Code) normalizes its native activity into this shape. The playback engine is a deterministic fold over a sorted stream of these records.",
+  "type": "object",
+  "required": ["timestamp", "action"],
+  "properties": {
+    "timestamp": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Milliseconds elapsed since session.start (t=0). Monotonic non-decreasing across a session."
+    },
+    "action": {
+      "type": "string",
+      "description": "Discriminator. See action-specific payload requirements below.",
+      "enum": [
+        "session.start",
+        "session.end",
+        "think",
+        "narrate",
+        "file.create",
+        "file.delete",
+        "file.rename",
+        "type",
+        "insert",
+        "delete",
+        "replace",
+        "cursor",
+        "select",
+        "scroll",
+        "focus",
+        "close",
+        "pause",
+        "terminal",
+        "terminal.open",
+        "terminal.command",
+        "terminal.write",
+        "terminal.exit",
+        "build.start",
+        "build.success",
+        "build.failure",
+        "test.start",
+        "test.result",
+        "error",
+        "fix",
+        "dependency.add",
+        "dependency.remove"
+      ]
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Server-assigned monotonic sequence number. Used for stable ordering when timestamps tie and for cursor pagination."
+    },
+    "actor": {
+      "type": "string",
+      "enum": ["agent", "human", "system", "tool"],
+      "default": "agent",
+      "description": "Who caused the event."
+    },
+    "id": {
+      "type": "string",
+      "description": "Stable idempotency key. Re-ingesting the same event must not duplicate it."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "action": { "enum": ["type", "insert"] } }, "required": ["action"] },
+      "then": {
+        "required": ["file", "content"],
+        "properties": {
+          "file": { "type": "string", "description": "Repo-relative POSIX path." },
+          "content": { "type": "string", "description": "Text chunk. 'type' implies progressive reveal; 'insert' applies atomically." },
+          "offset": { "type": "number", "minimum": 0, "description": "Character offset. Defaults to end of file for 'type'." },
+          "profile": { "$ref": "#/$defs/typingProfile" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "action": { "const": "delete" } }, "required": ["action"] },
+      "then": {
+        "required": ["count"],
+        "properties": {
+          "file": { "type": "string" },
+          "count": { "type": "number", "minimum": 0, "description": "Number of characters removed." },
+          "offset": { "type": "number", "minimum": 0 }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "action": { "const": "replace" } }, "required": ["action"] },
+      "then": {
+        "required": ["file", "count", "content"],
+        "properties": {
+          "file": { "type": "string" },
+          "count": { "type": "number", "minimum": 0 },
+          "content": { "type": "string" },
+          "offset": { "type": "number", "minimum": 0 }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "action": { "const": "file.create" } }, "required": ["action"] },
+      "then": {
+        "required": ["file"],
+        "properties": {
+          "file": { "type": "string" },
+          "language": { "type": "string", "description": "Language id for syntax highlighting. Inferred when omitted." }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "action": { "const": "file.delete" } }, "required": ["action"] },
+      "then": {
+        "required": ["file"],
+        "properties": { "file": { "type": "string" } }
+      }
+    },
+    {
+      "if": { "properties": { "action": { "const": "file.rename" } }, "required": ["action"] },
+      "then": {
+        "required": ["file", "to"],
+        "properties": {
+          "file": { "type": "string" },
+          "to": { "type": "string" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "action": { "const": "narrate" } }, "required": ["action"] },
+      "then": {
+        "required": ["text"],
+        "properties": {
+          "text": { "type": "string" },
+          "category": {
+            "type": "string",
+            "enum": ["explanation", "decision", "warning", "summary", "todo"]
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "action": { "const": "think" } }, "required": ["action"] },
+      "then": {
+        "properties": {
+          "duration": { "type": "number", "minimum": 0, "description": "Suggested pause length in ms. Defaults to the gap to the next event." },
+          "thought": { "type": "string" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "action": { "const": "pause" } }, "required": ["action"] },
+      "then": {
+        "properties": { "duration": { "type": "number", "minimum": 0 } }
+      }
+    },
+    {
+      "if": { "properties": { "action": { "enum": ["cursor", "select", "scroll", "focus", "close"] } }, "required": ["action"] },
+      "then": {
+        "required": ["file"],
+        "properties": {
+          "file": { "type": "string" },
+          "offset": { "type": "number", "minimum": 0 },
+          "length": { "type": "number", "minimum": 0 },
+          "top": { "type": "number", "minimum": 0 }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "action": { "enum": ["terminal", "terminal.command", "terminal.write", "terminal.exit"] } }, "required": ["action"] },
+      "then": {
+        "properties": {
+          "command": { "type": "string" },
+          "text": { "type": "string" },
+          "exitCode": { "type": "number" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "action": { "enum": ["error", "fix"] } }, "required": ["action"] },
+      "then": {
+        "required": ["message"],
+        "properties": {
+          "message": { "type": "string" },
+          "file": { "type": "string" },
+          "line": { "type": "number" },
+          "column": { "type": "number" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "action": { "const": "build.start" } }, "required": ["action"] },
+      "then": {
+        "properties": { "target": { "type": "string" } }
+      }
+    },
+    {
+      "if": { "properties": { "action": { "const": "build.failure" } }, "required": ["action"] },
+      "then": {
+        "properties": {
+          "errors": { "type": "array", "items": { "type": "string" } },
+          "durationMs": { "type": "number", "minimum": 0 }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "action": { "const": "test.result" } }, "required": ["action"] },
+      "then": {
+        "required": ["passed", "failed"],
+        "properties": {
+          "passed": { "type": "number", "minimum": 0 },
+          "failed": { "type": "number", "minimum": 0 },
+          "durationMs": { "type": "number", "minimum": 0 }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "action": { "const": "dependency.add" } }, "required": ["action"] },
+      "then": {
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "version": { "type": "string" },
+          "manager": { "type": "string", "enum": ["npm", "pnpm", "yarn", "pip", "poetry", "cargo", "go", "maven", "gradle", "gem", "composer"] }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "typingProfile": {
+      "type": "object",
+      "description": "Hints for the human-like typing simulator. Recorded by adapters; honoured by the playback engine.",
+      "properties": {
+        "cps": { "type": "number", "exclusiveMinimum": 0, "description": "Base characters per second. Default 7.5 (~human average)." },
+        "jitter": { "type": "number", "minimum": 0, "maximum": 1, "description": "Per-character timing variance. Default 0.35." },
+        "punctuationPauseMs": { "type": "number", "minimum": 0, "default": 90 },
+        "newlinePauseMs": { "type": "number", "minimum": 0, "default": 160 },
+        "indentPauseMs": { "type": "number", "minimum": 0, "default": 120 },
+        "keywordPauseMs": { "type": "number", "minimum": 0, "default": 320, "description": "Extra pause before def/class/function blocks." }
+      },
+      "additionalProperties": false
+    }
+  }
+}
