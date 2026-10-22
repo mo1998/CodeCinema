@@ -35,11 +35,6 @@ export default function DemoPage() {
       prompt="Build a small Express + TypeScript task API with validation, bearer auth and tests."
       autoplay
       storageKey="codecinema:demo"
-      onReady={() => {
-        // Signal to the export renderer that the replay is ready to record.
-        (window as unknown as { __CODECINEMA_READY__?: boolean }).__CODECINEMA_READY__ =
-          true;
-      }}
     />
   );
 }

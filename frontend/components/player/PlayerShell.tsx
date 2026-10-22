@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { PanelRightClose, PanelRightOpen, Terminal as TerminalIcon } from 'lucide-react';
-import { PlaybackEngine } from '@/lib/engine/engine';
+import { PlaybackEngine, type EngineState } from '@/lib/engine/engine';
 import type { SessionEvent } from '@/lib/engine/events';
 import {
   PlaybackProvider,
   readPersistedPosition,
   useEngine,
   useEngineDisplay,
+  useEngineState,
   usePlaybackPersistence,
 } from '@/lib/engine/usePlayback';
 import { IconButton } from '@/components/ui/Button';
@@ -25,6 +26,8 @@ import { TopBar } from './TopBar';
 import { ShortcutHelp } from './ShortcutHelp';
 import { clsx } from 'clsx';
 import { useLiveSession } from '@/lib/api/live';
+
+const selectPlaybackStatus = (state: EngineState) => state.status;
 
 export interface PlayerShellProps {
   events: SessionEvent[];
@@ -82,6 +85,14 @@ function PlayerShellInner({
       typeof window !== 'undefined' ? window.location.hash.match(/t=(\d+)/) : null;
     const persisted = storageKey ? readPersistedPosition(storageKey) : null;
 
+    // `?speed=4` lets a share link (or the export renderer) choose the
+    // playback rate.
+    if (typeof window !== 'undefined') {
+      const speed = new URLSearchParams(window.location.search).get('speed');
+      const parsed = speed ? Number(speed) : Number.NaN;
+      if (Number.isFinite(parsed) && parsed > 0) engine.setSpeed(parsed);
+    }
+
     if (match) {
       engine.seek(Number(match[1]));
     } else if (persisted && persisted.time > 0) {
@@ -110,6 +121,26 @@ function PlayerShellInner({
     if (typeof window === 'undefined') return;
     (window as unknown as Record<string, unknown>).__CODECINEMA_ENGINE__ = engine;
   }, [engine]);
+
+  // The video-export renderer waits on these two flags: the first says the
+  // replay is loaded, the second that it has played to the end.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const flags = window as unknown as Record<string, unknown>;
+    flags.__CODECINEMA_READY__ = true;
+    flags.__CODECINEMA_DONE__ = false;
+    return () => {
+      flags.__CODECINEMA_READY__ = false;
+    };
+  }, [events]);
+
+  const playbackStatus = useEngineState(selectPlaybackStatus);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (playbackStatus === 'ended') {
+      (window as unknown as Record<string, unknown>).__CODECINEMA_DONE__ = true;
+    }
+  }, [playbackStatus]);
 
   // Live mode: append events as the agent produces them.
   useLiveSession({
