@@ -155,7 +155,10 @@ export const api = {
     }),
 
   publishSession: (id: string) =>
-    request<SessionDetail>(`/v1/sessions/${id}/publish`, { method: 'POST' }),
+    request<{ id: string; share_slug: string; share_url?: string }>(
+      `/v1/sessions/${id}/publish`,
+      { method: 'POST' },
+    ),
 
   createExport: (id: string, type: ExportType) =>
     request<ExportJob>(`/v1/sessions/${id}/exports`, {
@@ -186,4 +189,27 @@ export const api = {
       body: JSON.stringify({ body }),
       token,
     }),
+
+  deleteComment: (sessionId: string, commentId: string, token?: string) =>
+    request<void>(`/v1/sessions/${sessionId}/comments/${commentId}`, {
+      method: 'DELETE',
+      token,
+    }),
+
+  getStars: (id: string) =>
+    request<{ session_id: string; stars: number; starred: boolean }>(
+      `/v1/sessions/${id}/stars`,
+    ),
+
+  starSession: (id: string, token?: string) =>
+    request<{ session_id: string; stars: number; starred: boolean }>(
+      `/v1/sessions/${id}/star`,
+      { method: 'POST', token },
+    ),
+
+  unstarSession: (id: string, token?: string) =>
+    request<{ session_id: string; stars: number; starred: boolean }>(
+      `/v1/sessions/${id}/star`,
+      { method: 'DELETE', token },
+    ),
 };

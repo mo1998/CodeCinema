@@ -1,29 +1,85 @@
-import { Suspense } from 'react';
+'use client';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Play } from 'lucide-react';
+import { Play, Search } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { createDemoSession } from '@/lib/demo/session';
 import { formatDuration, relativeTime } from '@/lib/format';
 import type { SessionEvent } from '@/lib/engine/events';
 
-export const dynamic = 'force-dynamic';
-
 function EventCount({ events }: { events: SessionEvent[] }) {
   return <span>{events.length.toLocaleString()} events</span>;
 }
 
-export default async function ExplorePage() {
-  let sessions: Awaited<ReturnType<typeof api.listSessions>>['items'] = [];
-  let backendReachable = true;
-  try {
-    sessions = (await api.listSessions({ limit: 40 })).items;
-  } catch {
-    backendReachable = false;
-    sessions = [];
-  }
+const AGENTS = [
+  'opencode',
+  'claude-code',
+  'cursor',
+  'gemini-cli',
+  'aider',
+  'cline',
+  'roo-code',
+];
 
+const SORTS = [
+  { value: 'newest', label: 'Newest' },
+  { value: 'popular', label: 'Popular' },
+  { value: 'duration', label: 'Longest' },
+];
+
+export default function ExplorePage() {
+  const [q, setQ] = useState('');
+  const [agent, setAgent] = useState('');
+  const [sort, setSort] = useState('newest');
+  const [items, setItems] = useState<Awaited<ReturnType<typeof api.listSessions>>['items']>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [backendReachable, setBackendReachable] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const demoEvents = createDemoSession();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const load = useCallback(
+    async (nextCursor?: string | null, append = false) => {
+      if (append) setLoadingMore(true);
+      else setLoading(true);
+      setError(null);
+      try {
+        const result = await api.listSessions({
+          limit: 40,
+          q: q || undefined,
+          agent: agent || undefined,
+          sort,
+          cursor: nextCursor ?? undefined,
+        });
+        setItems((prev) => (append ? [...prev, ...result.items] : result.items));
+        setCursor(result.next_cursor);
+        setBackendReachable(true);
+      } catch (err) {
+        setBackendReachable(false);
+        if (!append) setItems([]);
+        setError(err instanceof Error ? err.message : 'Failed to load sessions');
+      } finally {
+        if (append) setLoadingMore(false);
+        else setLoading(false);
+      }
+    },
+    [q, agent, sort],
+  );
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setCursor(null);
+      void load(null, false);
+    }, 250);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [q, agent, sort, load]);
 
   return (
     <main className="min-h-screen bg-bg">
@@ -45,6 +101,41 @@ export default async function ExplorePage() {
           Every replay is an immutable event log — seekable, scrubbable and
           frame-accurate.
         </p>
+
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <label className="relative flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
+            <input
+              value={q}
+              onChange={(event) => setQ(event.target.value)}
+              placeholder="Search sessions…"
+              className="h-9 w-full rounded-md border border-border bg-surface-2 pl-9 pr-3 text-[13px] text-text placeholder:text-faint focus:border-accent-border focus:outline-none"
+            />
+          </label>
+          <select
+            value={agent}
+            onChange={(event) => setAgent(event.target.value)}
+            className="h-9 rounded-md border border-border bg-surface-2 px-3 text-[13px] text-text focus:border-accent-border focus:outline-none"
+          >
+            <option value="">All agents</option>
+            {AGENTS.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+          <select
+            value={sort}
+            onChange={(event) => setSort(event.target.value)}
+            className="h-9 rounded-md border border-border bg-surface-2 px-3 text-[13px] text-text focus:border-accent-border focus:outline-none"
+          >
+            {SORTS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <div className="mt-8 space-y-2">
           <Link
@@ -69,15 +160,19 @@ export default async function ExplorePage() {
               </p>
               <div className="mt-1 flex items-center gap-3 text-[11px] text-faint">
                 <span>claude-code</span>
-                <Suspense fallback={<span>…</span>}>
-                  <EventCount events={demoEvents} />
-                </Suspense>
+                <EventCount events={demoEvents} />
                 <span>{formatDuration(demoEvents[demoEvents.length - 1].timestamp)}</span>
               </div>
             </div>
           </Link>
 
-          {sessions.map((session) => (
+          {loading && (
+            <div className="rounded-lg border border-border bg-surface p-6 text-center text-[13px] text-muted">
+              Loading sessions…
+            </div>
+          )}
+
+          {!loading && items.map((session) => (
             <Link
               key={session.id}
               href={`/session/${session.id}`}
@@ -100,41 +195,47 @@ export default async function ExplorePage() {
                   <span>{session.event_count.toLocaleString()} events</span>
                   <span>{formatDuration(session.duration_ms)}</span>
                   <span>{relativeTime(session.created_at)}</span>
+                  {typeof session.stars === 'number' && (
+                    <span>★ {session.stars}</span>
+                  )}
                 </div>
               </div>
             </Link>
           ))}
 
-          {sessions.length === 0 && (
+          {!loading && items.length === 0 && backendReachable && (
             <div className="rounded-lg border border-dashed border-border bg-surface/50 p-8 text-center">
-              {backendReachable ? (
-                <>
-                  <p className="text-[13px] text-muted">
-                    No recorded sessions yet. The backend is reachable.
-                  </p>
-                  <p className="mt-1 text-[12px] text-faint">
-                    Record one with{' '}
-                    <code className="rounded bg-surface-3 px-1 py-0.5 font-mono">
-                      python -m app.recorder.cli record --repo . --agent manual --output session.ndjson -- your-command
-                    </code>
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="text-[13px] text-muted">
-                    The backend is not reachable, so only the bundled demo session
-                    is listed.
-                  </p>
-                  <p className="mt-1 text-[12px] text-faint">
-                    Start the API with{' '}
-                    <code className="rounded bg-surface-3 px-1 py-0.5 font-mono">
-                      docker compose up
-                    </code>{' '}
-                    (or run it locally) to record and browse real sessions.
-                  </p>
-                </>
-              )}
+              <p className="text-[13px] text-muted">
+                No recorded sessions match these filters.
+              </p>
             </div>
+          )}
+
+          {!backendReachable && !loading && (
+            <div className="rounded-lg border border-dashed border-border bg-surface/50 p-8 text-center">
+              <p className="text-[13px] text-muted">
+                The backend is not reachable, so only the bundled demo session is
+                listed.
+              </p>
+              <p className="mt-1 text-[12px] text-faint">
+                Start the API with{' '}
+                <code className="rounded bg-surface-3 px-1 py-0.5 font-mono">
+                  docker compose up
+                </code>{' '}
+                (or run it locally) to record and browse real sessions.
+              </p>
+              {error && <p className="mt-2 text-[11px] text-danger">{error}</p>}
+            </div>
+          )}
+
+          {cursor && !loading && (
+            <button
+              onClick={() => void load(cursor, true)}
+              disabled={loadingMore}
+              className="w-full rounded-lg border border-border bg-surface py-2.5 text-[13px] text-muted transition-colors hover:bg-surface-2 disabled:opacity-50"
+            >
+              {loadingMore ? 'Loading…' : 'Load more'}
+            </button>
           )}
         </div>
       </div>

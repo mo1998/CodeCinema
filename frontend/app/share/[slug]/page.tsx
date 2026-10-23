@@ -1,4 +1,4 @@
-import { loadSessionEvents, loadSessionMeta } from '@/lib/api/server';
+import { loadSharedSessionEvents, loadSharedSessionMeta } from '@/lib/api/server';
 import { PlayerShell } from '@/components/player/PlayerShell';
 import { createDemoSession } from '@/lib/demo/session';
 
@@ -12,8 +12,8 @@ export default async function SharePage({
   const { slug } = await params;
 
   const [events, meta] = await Promise.all([
-    loadSessionEvents(slug),
-    loadSessionMeta(slug),
+    loadSharedSessionEvents(slug),
+    loadSharedSessionMeta(slug),
   ]);
 
   if (!events) {
@@ -32,7 +32,7 @@ export default async function SharePage({
   return (
     <PlayerShell
       events={events}
-      sessionId={slug}
+      sessionId={meta?.id}
       title={meta?.title}
       agent={meta?.agent}
       prompt={meta?.prompt}

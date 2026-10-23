@@ -25,7 +25,7 @@ import { EducationalOverlay } from './EducationalOverlay';
 import { TopBar } from './TopBar';
 import { ShortcutHelp } from './ShortcutHelp';
 import { clsx } from 'clsx';
-import { useLiveSession } from '@/lib/api/live';
+import { useLiveSession, usePresence } from '@/lib/api/live';
 
 const selectPlaybackStatus = (state: EngineState) => state.status;
 
@@ -143,11 +143,12 @@ function PlayerShellInner({
   }, [playbackStatus]);
 
   // Live mode: append events as the agent produces them.
-  useLiveSession({
+  const liveState = useLiveSession({
     sessionId: sessionId ?? '',
     enabled: live && Boolean(sessionId),
     onEvent: (event) => engine.appendEvents([event]),
   });
+  const presenceViewers = usePresence(sessionId ?? '', Boolean(sessionId) && !live);
 
   // Keep the URL hash in sync so the position is shareable.
   useEffect(() => {
@@ -221,6 +222,8 @@ function PlayerShellInner({
         title={title}
         agent={agent}
         prompt={prompt}
+        liveStatus={live ? liveState.status : undefined}
+        viewers={live ? liveState.viewers : presenceViewers}
         onToggleRight={() => setRightOpen((value) => !value)}
         rightOpen={rightOpen}
         onToggleTerminal={() => setTerminalOpen((value) => !value)}
@@ -295,7 +298,7 @@ function PlayerShellInner({
               className="shrink-0 overflow-hidden"
             >
               <div className="h-full w-full border-l border-border">
-                <RightPanel className="h-full" />
+                <RightPanel className="h-full" sessionId={sessionId} />
               </div>
             </motion.div>
           )}
