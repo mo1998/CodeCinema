@@ -183,7 +183,7 @@ export function TopBar({
   };
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-surface px-3">
+    <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-border bg-surface px-3 sm:flex-nowrap sm:gap-3">
       <div className="flex items-center gap-2">
         <Image
           src="/logo.png"
