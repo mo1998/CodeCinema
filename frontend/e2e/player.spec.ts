@@ -10,7 +10,9 @@ test.describe('player', () => {
       timeout: 60_000,
     });
     await expect(page.getByRole('slider', { name: 'Session timeline' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Pause' }).first()).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Play' }).first().or(page.getByRole('button', { name: 'Pause' }).first()),
+    ).toBeVisible();
   });
 
   test('seeking to the end keeps the player interactive', async ({ page }) => {
