@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { PanelRightClose, PanelRightOpen, Terminal as TerminalIcon } from 'lucide-react';
+import { PanelLeft, PanelRightClose, PanelRightOpen, Terminal as TerminalIcon } from 'lucide-react';
 import { PlaybackEngine, type EngineState } from '@/lib/engine/engine';
 import type { SessionEvent } from '@/lib/engine/events';
 import {
@@ -64,11 +64,13 @@ function PlayerShellInner({
 }: PlayerShellProps) {
   const engine = useEngine();
   const [leftWidth, setLeftWidth] = useState(240);
+  const [leftOpen, setLeftOpen] = useState(true);
   const [rightWidth, setRightWidth] = useState(384);
   const [terminalHeight, setTerminalHeight] = useState(200);
   const [terminalOpen, setTerminalOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [overlayDismissed, setOverlayDismissed] = useState(false);
+  const [bookmarks, setBookmarks] = useState<number[]>([]);
   const [helpOpen, setHelpOpen] = useState(false);
   const resumedRef = useRef(false);
 
@@ -110,6 +112,16 @@ function PlayerShellInner({
   }, [engine, events]);
 
   usePlaybackPersistence(storageKey ?? 'codecinema:position', Boolean(storageKey));
+
+  useEffect(() => {
+    const key = `codecinema:bookmarks:${storageKey ?? title ?? 'session'}`;
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (raw) setBookmarks(JSON.parse(raw) as number[]);
+    } catch {
+      /* ignore */
+    }
+  }, [storageKey, title]);
 
   // Live mode: the clock waits at the edge of the stream for more events.
   useEffect(() => {
@@ -215,6 +227,41 @@ function PlayerShellInner({
 
   const handleTimelineSeek = useCallback(() => {}, []);
 
+  const toggleBookmark = useCallback(
+    (time: number) => {
+      setBookmarks((prev) => {
+        const exists = prev.some((value) => Math.abs(value - time) < 500);
+        const next = exists
+          ? prev.filter((value) => Math.abs(value - time) >= 500)
+          : [...prev, time].sort((a, b) => a - b);
+        const key = `codecinema:bookmarks:${storageKey ?? title ?? 'session'}`;
+        try {
+          window.localStorage.setItem(key, JSON.stringify(next));
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
+    },
+    [storageKey, title],
+  );
+
+  const removeBookmark = useCallback(
+    (time: number) => {
+      setBookmarks((prev) => {
+        const next = prev.filter((value) => Math.abs(value - time) >= 500);
+        const key = `codecinema:bookmarks:${storageKey ?? title ?? 'session'}`;
+        try {
+          window.localStorage.setItem(key, JSON.stringify(next));
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
+    },
+    [storageKey, title],
+  );
+
   return (
     <div className="flex h-dvh min-h-0 w-full flex-col bg-bg">
       <TopBar
@@ -224,6 +271,8 @@ function PlayerShellInner({
         prompt={prompt}
         liveStatus={live ? liveState.status : undefined}
         viewers={live ? liveState.viewers : presenceViewers}
+        leftOpen={leftOpen}
+        onToggleLeft={() => setLeftOpen((value) => !value)}
         onToggleRight={() => setRightOpen((value) => !value)}
         rightOpen={rightOpen}
         onToggleTerminal={() => setTerminalOpen((value) => !value)}
@@ -232,19 +281,33 @@ function PlayerShellInner({
 
       <div className="flex min-h-0 flex-1">
         {/* Left: project explorer */}
-        <div
-          className="shrink-0 overflow-hidden border-r border-border"
-          style={{ width: leftWidth }}
-        >
-          <ProjectExplorer className="h-full" />
-        </div>
-        <Resizer
-          orientation="vertical"
-          size={leftWidth}
-          onResize={setLeftWidth}
-          min={180}
-          max={480}
-        />
+        {leftOpen ? (
+          <>
+            <div
+              className="shrink-0 overflow-hidden border-r border-border"
+              style={{ width: leftWidth }}
+            >
+              <ProjectExplorer className="h-full" />
+            </div>
+            <Resizer
+              orientation="vertical"
+              size={leftWidth}
+              onResize={setLeftWidth}
+              min={180}
+              max={480}
+            />
+          </>
+        ) : (
+          <div className="flex w-8 shrink-0 items-center justify-center border-r border-border">
+            <button
+              onClick={() => setLeftOpen(true)}
+              aria-label="Show explorer"
+              className="flex h-7 w-7 items-center justify-center rounded-sm text-faint transition-colors hover:bg-surface-3 hover:text-muted"
+            >
+              <PanelLeft className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* Center: editor + terminal */}
         <div className="flex min-w-0 flex-1 flex-col">
@@ -298,7 +361,13 @@ function PlayerShellInner({
               className="shrink-0 overflow-hidden"
             >
               <div className="h-full w-full border-l border-border">
-                <RightPanel className="h-full" sessionId={sessionId} />
+                <RightPanel
+                  className="h-full"
+                  sessionId={sessionId}
+                  bookmarks={bookmarks}
+                  onSeekBookmark={(time) => engine.seek(time)}
+                  onRemoveBookmark={removeBookmark}
+                />
               </div>
             </motion.div>
           )}
@@ -315,7 +384,10 @@ function PlayerShellInner({
         )}
       </div>
 
-      <PlaybackControls onShowHelp={() => setHelpOpen(true)} />
+      <PlaybackControls
+        onShowHelp={() => setHelpOpen(true)}
+        onBookmark={toggleBookmark}
+      />
 
       <ShortcutHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>

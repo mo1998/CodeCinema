@@ -13,15 +13,22 @@ import { ReasoningPanel } from './ReasoningPanel';
 import { ProgressPanel } from './ProgressPanel';
 import { ArchitecturePanel } from './ArchitecturePanel';
 import { CommentsPanel } from './CommentsPanel';
+import { BookmarksPanel } from './BookmarksPanel';
 
-type PanelId = 'timeline' | 'reasoning' | 'progress' | 'architecture' | 'comments';
+type PanelId = 'timeline' | 'reasoning' | 'progress' | 'architecture' | 'comments' | 'bookmarks';
 
 export function RightPanel({
   className,
   sessionId,
+  bookmarks = [],
+  onSeekBookmark,
+  onRemoveBookmark,
 }: {
   className?: string;
   sessionId?: string;
+  bookmarks?: number[];
+  onSeekBookmark?: (time: number) => void;
+  onRemoveBookmark?: (time: number) => void;
 }) {
   const [active, setActive] = useState<PanelId>('timeline');
 
@@ -38,6 +45,7 @@ export function RightPanel({
             { id: 'progress', label: 'Progress', icon: <TrendingUp className="h-3.5 w-3.5" /> },
             { id: 'architecture', label: 'Architecture', icon: <Boxes className="h-3.5 w-3.5" /> },
             { id: 'comments', label: 'Comments', icon: <Boxes className="h-3.5 w-3.5" /> },
+            { id: 'bookmarks', label: 'Bookmarks', icon: <Boxes className="h-3.5 w-3.5" /> },
           ]}
         />
       </div>
@@ -46,6 +54,13 @@ export function RightPanel({
       {active === 'progress' && <ProgressPanel />}
       {active === 'architecture' && <ArchitecturePanel />}
       {active === 'comments' && <CommentsPanel sessionId={sessionId} />}
+      {active === 'bookmarks' && (
+        <BookmarksPanel
+          bookmarks={bookmarks}
+          onSeek={onSeekBookmark ?? (() => {})}
+          onRemove={onRemoveBookmark ?? (() => {})}
+        />
+      )}
     </div>
   );
 }
