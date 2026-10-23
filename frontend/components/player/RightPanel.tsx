@@ -15,8 +15,9 @@ import { ArchitecturePanel } from './ArchitecturePanel';
 import { CommentsPanel } from './CommentsPanel';
 import { BookmarksPanel } from './BookmarksPanel';
 import { ExportsPanel } from './ExportsPanel';
+import { ContentSearchPanel } from './ContentSearchPanel';
 
-type PanelId = 'timeline' | 'reasoning' | 'progress' | 'architecture' | 'comments' | 'bookmarks' | 'exports';
+type PanelId = 'timeline' | 'reasoning' | 'progress' | 'architecture' | 'comments' | 'bookmarks' | 'exports' | 'search';
 
 export function RightPanel({
   className,
@@ -48,6 +49,7 @@ export function RightPanel({
             { id: 'comments', label: 'Comments', icon: <Boxes className="h-3.5 w-3.5" /> },
             { id: 'bookmarks', label: 'Bookmarks', icon: <Boxes className="h-3.5 w-3.5" /> },
             { id: 'exports', label: 'Exports', icon: <Boxes className="h-3.5 w-3.5" /> },
+            { id: 'search', label: 'Search', icon: <Boxes className="h-3.5 w-3.5" /> },
           ]}
         />
       </div>
@@ -64,6 +66,7 @@ export function RightPanel({
         />
       )}
       {active === 'exports' && <ExportsPanel sessionId={sessionId} />}
+      {active === 'search' && <ContentSearchPanel />}
     </div>
   );
 }
