@@ -23,6 +23,8 @@ import { Button, IconButton } from '@/components/ui/Button';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { api, API_BASE, type ExportType } from '@/lib/api/client';
 import type { LiveStatus } from '@/lib/api/live';
+import { useI18n } from '@/components/I18nProvider';
+import { LOCALES } from '@/lib/i18n';
 import { clsx } from 'clsx';
 
 export function TopBar({
@@ -61,6 +63,7 @@ export function TopBar({
   const [starBusy, setStarBusy] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [token, setToken] = useState('');
+  const { locale, setLocale } = useI18n();
 
   useEffect(() => {
     const saved = window.localStorage.getItem('codecinema:theme');
@@ -317,6 +320,19 @@ export function TopBar({
             </Button>
           </Tooltip>
         )}
+
+        <select
+          value={locale}
+          onChange={(event) => setLocale(event.target.value as 'en' | 'es' | 'fr')}
+          aria-label="Language"
+          className="h-7 rounded-md border border-border bg-surface-2 px-2 text-[11px] text-text focus:border-accent-border focus:outline-none"
+        >
+          {LOCALES.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
 
         <Tooltip label={theme === 'dark' ? 'Light theme' : 'Dark theme'}>
           <IconButton label="Toggle theme" onClick={toggleTheme}>
