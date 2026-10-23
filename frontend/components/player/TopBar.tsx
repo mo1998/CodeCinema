@@ -10,6 +10,7 @@ import {
   Film,
   GitBranch,
   Loader2,
+  PanelLeft,
   PanelRightOpen,
   Moon,
   Share2,
@@ -31,6 +32,8 @@ export function TopBar({
   sessionId,
   liveStatus,
   viewers,
+  leftOpen,
+  onToggleLeft,
   onToggleRight,
   rightOpen,
   onToggleTerminal,
@@ -42,6 +45,8 @@ export function TopBar({
   sessionId?: string;
   liveStatus?: LiveStatus;
   viewers?: number;
+  leftOpen?: boolean;
+  onToggleLeft?: () => void;
   onToggleRight?: () => void;
   rightOpen?: boolean;
   onToggleTerminal?: () => void;
@@ -287,6 +292,18 @@ export function TopBar({
             {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
           </IconButton>
         </Tooltip>
+
+        {onToggleLeft && (
+          <Tooltip label={leftOpen ? 'Hide explorer' : 'Show explorer'}>
+            <IconButton
+              label={leftOpen ? 'Hide explorer' : 'Show explorer'}
+              active={leftOpen}
+              onClick={onToggleLeft}
+            >
+              <PanelLeft className="h-3.5 w-3.5" />
+            </IconButton>
+          </Tooltip>
+        )}
 
         {onToggleTerminal && (
           <Tooltip label={terminalOpen ? 'Hide terminal' : 'Show terminal'}>

@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Bookmark,
   ChevronFirst,
   ChevronLast,
   Pause,
@@ -19,9 +20,11 @@ const SPEEDS = [0.5, 1, 2, 5];
 export function PlaybackControls({
   className,
   onShowHelp,
+  onBookmark,
 }: {
   className?: string;
   onShowHelp?: () => void;
+  onBookmark?: (time: number) => void;
 }) {
   const engine = useEngine();
   const status = useEngineState((state) => state.status);
@@ -72,6 +75,16 @@ export function PlaybackControls({
         >
           <ChevronLast className="h-4 w-4" />
         </button>
+        {onBookmark && (
+          <button
+            onClick={() => onBookmark(time)}
+            title="Bookmark this moment"
+            aria-label="Bookmark this moment"
+            className="flex h-7 w-7 items-center justify-center rounded-sm text-muted transition-colors hover:bg-surface-3 hover:text-text"
+          >
+            <Bookmark className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       <div className="hidden items-center gap-1 text-[11px] text-faint sm:flex">
