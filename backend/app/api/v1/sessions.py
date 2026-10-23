@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Response, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import enforce_write_rate_limit, get_principal
@@ -242,6 +244,32 @@ async def stars(
     await get_session_or_404(session, session_id)
     total = await count_stars(session, session_id)
     return StarResponse(session_id=session_id, stars=total, starred=False)
+
+
+@router.post("/purge-deleted")
+async def purge_deleted(
+    older_than_days: int = 30,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Purge soft-deleted sessions older than the given number of days."""
+    cutoff = datetime.now(UTC) - timedelta(days=max(1, older_than_days))
+    rows = (
+        (
+            await session.execute(
+                select(Session).where(
+                    Session.deleted_at.is_not(None),
+                    Session.deleted_at < cutoff,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    count = len(rows)
+    for record in rows:
+        await session.delete(record)
+    await session.commit()
+    return {"purged": count}
 
 
 __all__ = ["router"]
