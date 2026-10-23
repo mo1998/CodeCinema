@@ -198,7 +198,7 @@ function PlayerShellInner({
           engine.seek(Math.min(engine.getDuration(), engine.getTime() + 10000));
           break;
         case 'f':
-          engine.setSpeed(engine.getSpeed() >= 10 ? 1 : engine.getSpeed() * 2);
+          engine.setSpeed(engine.getSpeed() >= 5 ? 1 : engine.getSpeed() * 2);
           break;
         case '?':
           setHelpOpen(true);

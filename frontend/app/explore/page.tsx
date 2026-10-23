@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
-import { Clapperboard, Play } from 'lucide-react';
+import Image from 'next/image';
+import { Play } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { createDemoSession } from '@/lib/demo/session';
 import { formatDuration, relativeTime } from '@/lib/format';
@@ -14,9 +15,11 @@ function EventCount({ events }: { events: SessionEvent[] }) {
 
 export default async function ExplorePage() {
   let sessions: Awaited<ReturnType<typeof api.listSessions>>['items'] = [];
+  let backendReachable = true;
   try {
     sessions = (await api.listSessions({ limit: 40 })).items;
   } catch {
+    backendReachable = false;
     sessions = [];
   }
 
@@ -26,9 +29,7 @@ export default async function ExplorePage() {
     <main className="min-h-screen bg-bg">
       <header className="flex h-12 items-center gap-3 border-b border-border bg-surface px-4">
         <Link href="/" className="flex items-center gap-2">
-          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-accent/15 text-accent">
-            <Clapperboard className="h-3.5 w-3.5" />
-          </span>
+          <Image src="/logo.png" alt="CodeCinema" width={24} height={24} className="h-6 w-6 rounded-md" />
           <span className="text-[13px] font-semibold tracking-tight text-text">
             CodeCinema
           </span>
@@ -106,17 +107,33 @@ export default async function ExplorePage() {
 
           {sessions.length === 0 && (
             <div className="rounded-lg border border-dashed border-border bg-surface/50 p-8 text-center">
-              <p className="text-[13px] text-muted">
-                The backend is not reachable, so only the bundled demo session is
-                listed.
-              </p>
-              <p className="mt-1 text-[12px] text-faint">
-                Start the API with{' '}
-                <code className="rounded bg-surface-3 px-1 py-0.5 font-mono">
-                  docker compose up
-                </code>{' '}
-                to record and browse real sessions.
-              </p>
+              {backendReachable ? (
+                <>
+                  <p className="text-[13px] text-muted">
+                    No recorded sessions yet. The backend is reachable.
+                  </p>
+                  <p className="mt-1 text-[12px] text-faint">
+                    Record one with{' '}
+                    <code className="rounded bg-surface-3 px-1 py-0.5 font-mono">
+                      python -m app.recorder.cli record --repo . --agent manual --output session.ndjson -- your-command
+                    </code>
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[13px] text-muted">
+                    The backend is not reachable, so only the bundled demo session
+                    is listed.
+                  </p>
+                  <p className="mt-1 text-[12px] text-faint">
+                    Start the API with{' '}
+                    <code className="rounded bg-surface-3 px-1 py-0.5 font-mono">
+                      docker compose up
+                    </code>{' '}
+                    (or run it locally) to record and browse real sessions.
+                  </p>
+                </>
+              )}
             </div>
           )}
         </div>

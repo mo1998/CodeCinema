@@ -18,6 +18,16 @@ scrubbable, searchable, and portable between agents.
 
 ---
 
+## See it in action
+
+![CodeCinema demo replay](docs/media/demo.gif)
+
+| Home | Explore | Replay |
+| --- | --- | --- |
+| ![Home](docs/media/home.png) | ![Explore](docs/media/explore.png) | ![Replay](docs/media/demo.png) |
+
+A short video walkthrough is also available: [demo.mp4](docs/media/demo.mp4).
+
 ## What it does
 
 **Records the agent's actual changes.** Not just the final code — the create,

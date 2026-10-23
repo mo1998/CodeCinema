@@ -14,7 +14,7 @@ import { formatTimePrecise } from '@/lib/format';
 import { clsx } from 'clsx';
 import { Scrubber } from './Scrubber';
 
-const SPEEDS = [1, 2, 5, 10];
+const SPEEDS = [0.5, 1, 2, 5];
 
 export function PlaybackControls({
   className,

@@ -1,8 +1,9 @@
 'use client';
 
+import Image from 'next/image';
+
 import { useState } from 'react';
 import {
-  Clapperboard,
   Copy,
   Download,
   FileJson,
@@ -81,9 +82,13 @@ export function TopBar({
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-surface px-3">
       <div className="flex items-center gap-2">
-        <div className="flex h-6 w-6 items-center justify-center rounded-md bg-accent/15 text-accent">
-          <Clapperboard className="h-3.5 w-3.5" />
-        </div>
+        <Image
+          src="/logo.png"
+          alt="CodeCinema"
+          width={24}
+          height={24}
+          className="h-6 w-6 rounded-md"
+        />
         <span className="text-[13px] font-semibold tracking-tight text-text">
           CodeCinema
         </span>

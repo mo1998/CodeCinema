@@ -25,8 +25,13 @@ export function Tooltip({
 }) {
   const [open, setOpen] = useState(false);
   const [align, setAlign] = useState<'center' | 'start' | 'end'>('center');
+  const [resolvedSide, setResolvedSide] = useState(side);
   const wrapperRef = useRef<HTMLSpanElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setResolvedSide(side);
+  }, [side]);
 
   const show = () => {
     timerRef.current = setTimeout(() => {
@@ -38,6 +43,12 @@ export function Tooltip({
         if (spaceRight < half) setAlign('end');
         else if (spaceLeft < half) setAlign('start');
         else setAlign('center');
+
+        // Flip vertically when there is not enough room for the tooltip on the
+        // requested side (e.g. top-bar buttons hugging the window's top edge).
+        if (side === 'top' && rect.top < 40) setResolvedSide('bottom');
+        else if (side === 'bottom' && rect.bottom + 40 > window.innerHeight) setResolvedSide('top');
+        else setResolvedSide(side);
       }
       setOpen(true);
     }, delay);
@@ -55,14 +66,20 @@ export function Tooltip({
     if (!open) return;
     const rect = wrapperRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const width = (wrapperRef.current?.querySelector('[role="tooltip"]') as
+    const tooltip = wrapperRef.current?.querySelector('[role="tooltip"]') as
       | HTMLElement
-      | null)?.offsetWidth ?? 120;
+      | null;
+    const width = tooltip?.offsetWidth ?? 120;
+    const height = tooltip?.offsetHeight ?? 24;
     const half = width / 2;
     if (rect.right + half > window.innerWidth) setAlign('end');
     else if (rect.left - half < 0) setAlign('start');
     else setAlign('center');
-  }, [open]);
+
+    if (side === 'top' && rect.top < height + 8) setResolvedSide('bottom');
+    else if (side === 'bottom' && rect.bottom + height + 8 > window.innerHeight) setResolvedSide('top');
+    else setResolvedSide(side);
+  }, [open, side]);
 
   const verticalAlignClass =
     align === 'end'
@@ -76,7 +93,7 @@ export function Tooltip({
     bottom: `top-full ${verticalAlignClass} mt-1.5`,
     left: 'right-full top-1/2 -translate-y-1/2 mr-1.5',
     right: 'left-full top-1/2 -translate-y-1/2 ml-1.5',
-  }[side];
+  }[resolvedSide];
 
   return (
     <span
