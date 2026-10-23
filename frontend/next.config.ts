@@ -3,6 +3,7 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  allowedDevOrigins: ['127.0.0.1', 'localhost'],
   // Emits a minimal server bundle for the Docker image (`.next/standalone`).
   output: 'standalone',
   // Monaco ships a large amount of ESM; transpiling keeps the worker bundles
