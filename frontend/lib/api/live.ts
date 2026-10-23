@@ -110,3 +110,49 @@ export function useLiveSession({
 
   return { status, viewers };
 }
+
+export function usePresence(sessionId: string, enabled = true): number {
+  const [viewers, setViewers] = useState(0);
+
+  useEffect(() => {
+    if (!enabled || !sessionId) return;
+    const base =
+      process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ?? 'http://localhost:8000';
+    const url = `${base.replace(/^http/, 'ws')}/v1/sessions/${sessionId}/presence`;
+    let socket: WebSocket | null = null;
+    let closed = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const connect = () => {
+      if (closed) return;
+      try {
+        socket = new WebSocket(url);
+      } catch {
+        return;
+      }
+      socket.onmessage = (message) => {
+        try {
+          const payload = JSON.parse(message.data as string) as { type?: string; viewers?: number };
+          if (payload.type === 'presence' && typeof payload.viewers === 'number') {
+            setViewers(payload.viewers);
+          }
+        } catch {
+          /* ignore */
+        }
+      };
+      socket.onclose = () => {
+        if (closed) return;
+        reconnectTimer = setTimeout(connect, 5000);
+      };
+    };
+
+    connect();
+    return () => {
+      closed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      socket?.close();
+    };
+  }, [sessionId, enabled]);
+
+  return viewers;
+}

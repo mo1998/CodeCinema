@@ -12,10 +12,17 @@ import { TimelinePanel } from './TimelinePanel';
 import { ReasoningPanel } from './ReasoningPanel';
 import { ProgressPanel } from './ProgressPanel';
 import { ArchitecturePanel } from './ArchitecturePanel';
+import { CommentsPanel } from './CommentsPanel';
 
-type PanelId = 'timeline' | 'reasoning' | 'progress' | 'architecture';
+type PanelId = 'timeline' | 'reasoning' | 'progress' | 'architecture' | 'comments';
 
-export function RightPanel({ className }: { className?: string }) {
+export function RightPanel({
+  className,
+  sessionId,
+}: {
+  className?: string;
+  sessionId?: string;
+}) {
   const [active, setActive] = useState<PanelId>('timeline');
 
   return (
@@ -30,6 +37,7 @@ export function RightPanel({ className }: { className?: string }) {
             { id: 'reasoning', label: 'Reasoning', icon: <Brain className="h-3.5 w-3.5" /> },
             { id: 'progress', label: 'Progress', icon: <TrendingUp className="h-3.5 w-3.5" /> },
             { id: 'architecture', label: 'Architecture', icon: <Boxes className="h-3.5 w-3.5" /> },
+            { id: 'comments', label: 'Comments', icon: <Boxes className="h-3.5 w-3.5" /> },
           ]}
         />
       </div>
@@ -37,6 +45,7 @@ export function RightPanel({ className }: { className?: string }) {
       {active === 'reasoning' && <ReasoningPanel />}
       {active === 'progress' && <ProgressPanel />}
       {active === 'architecture' && <ArchitecturePanel />}
+      {active === 'comments' && <CommentsPanel sessionId={sessionId} />}
     </div>
   );
 }
