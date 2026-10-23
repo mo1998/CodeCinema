@@ -130,6 +130,9 @@ export async function fetchEvents(
 export const api = {
   health: () => request<{ status: string }>('/v1/health'),
 
+  createAnonymousToken: () =>
+    request<{ api_key: string }>('/v1/auth/anonymous', { method: 'POST' }),
+
   listSessions: (params: Record<string, string | number | undefined> = {}) => {
     const search = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
