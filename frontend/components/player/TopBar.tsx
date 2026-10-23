@@ -60,12 +60,14 @@ export function TopBar({
   const [starred, setStarred] = useState(false);
   const [starBusy, setStarBusy] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [token, setToken] = useState('');
 
   useEffect(() => {
     const saved = window.localStorage.getItem('codecinema:theme');
     const initial = saved === 'light' ? 'light' : 'dark';
     setTheme(initial);
     document.documentElement.dataset.theme = initial === 'light' ? 'light' : '';
+    setToken(window.localStorage.getItem('codecinema:token') ?? '');
   }, []);
 
   const toggleTheme = () => {
@@ -73,6 +75,21 @@ export function TopBar({
     setTheme(next);
     document.documentElement.dataset.theme = next === 'light' ? 'light' : '';
     window.localStorage.setItem('codecinema:theme', next);
+  };
+
+  const signIn = async () => {
+    try {
+      const result = await api.createAnonymousToken();
+      window.localStorage.setItem('codecinema:token', result.api_key);
+      setToken(result.api_key);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const signOut = () => {
+    window.localStorage.removeItem('codecinema:token');
+    setToken('');
   };
 
   const share = async () => {
@@ -286,6 +303,20 @@ export function TopBar({
             <span className="hidden sm:inline">{copied ? 'Copied' : 'Share'}</span>
           </Button>
         </Tooltip>
+
+        {token ? (
+          <Tooltip label="Sign out">
+            <Button size="sm" variant="ghost" onClick={signOut}>
+              Signed in
+            </Button>
+          </Tooltip>
+        ) : (
+          <Tooltip label="Sign in anonymously">
+            <Button size="sm" variant="secondary" onClick={() => void signIn()}>
+              Sign in
+            </Button>
+          </Tooltip>
+        )}
 
         <Tooltip label={theme === 'dark' ? 'Light theme' : 'Dark theme'}>
           <IconButton label="Toggle theme" onClick={toggleTheme}>
