@@ -172,7 +172,7 @@ jobs:
         with:
           context: ./frontend
           push: false
-          tags: ghcr.io/${{ github.repository }}/web:latest
+          tags: ghcr.io/${{ github.repository_owner }}/codecinema-web:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build backend image
@@ -180,6 +180,6 @@ jobs:
         with:
           context: ./backend
           push: false
-          tags: ghcr.io/${{ github.repository }}/api:latest
+          tags: ghcr.io/${{ github.repository_owner }}/codecinema-api:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
