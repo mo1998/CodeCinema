@@ -158,7 +158,7 @@ def test_fold_handles_the_shared_sample_fixture() -> None:
     files = {item["path"]: item for item in state["files"]}
     assert "src/health.py" in files
     assert files["src/health.py"]["text"] == (
-        "def health() -> dict[str, str]:\n    return {\"status\": \"ok\"}\n"
+        'def health() -> dict[str, str]:\n    return {"status": "ok"}\n'
     )
     assert state["terminal"]["open"] is True
     # The fixture ends with a successful run, so the last exit code is 0.
