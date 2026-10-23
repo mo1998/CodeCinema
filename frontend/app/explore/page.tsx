@@ -91,6 +91,9 @@ export default function ExplorePage() {
           </span>
         </Link>
         <span className="ml-2 text-[12px] text-faint">Explore</span>
+        <Link href="/manage" className="ml-auto text-[12px] text-muted hover:text-text">
+          Manage
+        </Link>
       </header>
 
       <div className="mx-auto max-w-5xl px-6 py-10">
