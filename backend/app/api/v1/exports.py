@@ -14,7 +14,7 @@ from app.core.db import get_db_session
 from app.core.errors import NotFoundError
 from app.core.security import Principal
 from app.schemas.export import ExportCreate, ExportOut
-from app.services.exports import create_export, enqueue_export, get_export_or_404
+from app.services.exports import create_export, enqueue_export, get_export_or_404, list_exports
 from app.services.sessions import get_session_or_404
 
 router = APIRouter(tags=["exports"])
@@ -53,6 +53,17 @@ async def create(
     job = await create_export(session, record, payload.type, requested_by=principal.user_id)
     await enqueue_export(job.id)
     return _to_out(job)
+
+
+@router.get("/sessions/{session_id}/exports", response_model=list[ExportOut])
+async def index(
+    session_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db_session),
+) -> list[ExportOut]:
+    """List export jobs for a session."""
+    await get_session_or_404(session, session_id)
+    jobs = await list_exports(session, session_id)
+    return [_to_out(job) for job in jobs]
 
 
 @router.get("/exports/{export_id}", response_model=ExportOut)

@@ -177,6 +177,9 @@ export const api = {
 
   getExport: (exportId: string) => request<ExportJob>(`/v1/exports/${exportId}`),
 
+  listExports: (sessionId: string) =>
+    request<ExportJob[]>(`/v1/sessions/${sessionId}/exports`),
+
   listAgents: () =>
     request<
       {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -19,6 +19,16 @@ export function ProgressPanel() {
   const totalEvents = useEngineState((state) => state.totalEvents);
   const consumedEvents = useEngineState((state) => state.consumedEvents);
   const build = useEngineState((state) => state.build);
+
+  useEffect(() => {
+    if (build.status !== 'failed') return;
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (Notification.permission === 'granted') {
+      new Notification('Build failed', { body: build.errors[0] ?? 'Check the build output.' });
+    } else if (Notification.permission === 'default') {
+      void Notification.requestPermission();
+    }
+  }, [build.status, build.errors]);
   const errors = useEngineState((state) => state.errors);
   const fixes = useEngineState((state) => state.fixes);
   const dependencies = useEngineState((state) => state.dependencies);

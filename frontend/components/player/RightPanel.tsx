@@ -14,8 +14,9 @@ import { ProgressPanel } from './ProgressPanel';
 import { ArchitecturePanel } from './ArchitecturePanel';
 import { CommentsPanel } from './CommentsPanel';
 import { BookmarksPanel } from './BookmarksPanel';
+import { ExportsPanel } from './ExportsPanel';
 
-type PanelId = 'timeline' | 'reasoning' | 'progress' | 'architecture' | 'comments' | 'bookmarks';
+type PanelId = 'timeline' | 'reasoning' | 'progress' | 'architecture' | 'comments' | 'bookmarks' | 'exports';
 
 export function RightPanel({
   className,
@@ -46,6 +47,7 @@ export function RightPanel({
             { id: 'architecture', label: 'Architecture', icon: <Boxes className="h-3.5 w-3.5" /> },
             { id: 'comments', label: 'Comments', icon: <Boxes className="h-3.5 w-3.5" /> },
             { id: 'bookmarks', label: 'Bookmarks', icon: <Boxes className="h-3.5 w-3.5" /> },
+            { id: 'exports', label: 'Exports', icon: <Boxes className="h-3.5 w-3.5" /> },
           ]}
         />
       </div>
@@ -61,6 +63,7 @@ export function RightPanel({
           onRemove={onRemoveBookmark ?? (() => {})}
         />
       )}
+      {active === 'exports' && <ExportsPanel sessionId={sessionId} />}
     </div>
   );
 }
