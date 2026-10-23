@@ -24,7 +24,11 @@ scrubbable, searchable, and portable between agents.
 
 | Home | Explore | Replay |
 | --- | --- | --- |
-| ![Home](docs/media/home.png) | ![Explore](docs/media/explore.png) | ![Replay](docs/media/demo.png) |
+| ![Home](docs/media/home.png) | ![Explore](docs/media/explore.png) | ![Replay](docs/media/replay.png) |
+
+| Panels | Comments | Diff |
+| --- | --- | --- |
+| ![Panels](docs/media/panel-timeline.png) | ![Comments](docs/media/panel-comments.png) | ![Diff](docs/media/panel-diff.png) |
 
 A short video walkthrough is also available: [demo.mp4](docs/media/demo.mp4).
 
@@ -46,6 +50,12 @@ movement, selection highlights, backspaces, rewrites, tab switches and scroll.
 extracted from the finished code.
 
 **Exports.** JSON session, MP4 video, GIF, and shareable replay links.
+
+**Community layer.** Comments, stars, tags, anonymous sign-in, and session
+management for creating, editing, publishing and deleting sessions.
+
+**Analysis panels.** Timeline, reasoning, progress, architecture, comments,
+bookmarks, exports, content search, file history and side-by-side diff.
 
 ## Supported agents
 
