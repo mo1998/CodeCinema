@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { I18nProvider } from '@/components/I18nProvider';
 
 export const metadata: Metadata = {
   title: {
@@ -45,7 +46,9 @@ export default function RootLayout({
         >
           Skip to content
         </a>
-        <div id="main-content">{children}</div>
+        <I18nProvider>
+          <div id="main-content">{children}</div>
+        </I18nProvider>
       </body>
     </html>
   );
