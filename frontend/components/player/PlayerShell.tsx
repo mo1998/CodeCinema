@@ -65,10 +65,10 @@ function PlayerShellInner({
   const engine = useEngine();
   const [leftWidth, setLeftWidth] = useState(240);
   const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
   const [rightWidth, setRightWidth] = useState(384);
   const [terminalHeight, setTerminalHeight] = useState(200);
   const [terminalOpen, setTerminalOpen] = useState(true);
-  const [rightOpen, setRightOpen] = useState(true);
   const [overlayDismissed, setOverlayDismissed] = useState(false);
   const [bookmarks, setBookmarks] = useState<number[]>([]);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -112,6 +112,14 @@ function PlayerShellInner({
   }, [engine, events]);
 
   usePlaybackPersistence(storageKey ?? 'codecinema:position', Boolean(storageKey));
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.matchMedia('(max-width: 768px)').matches) {
+      setLeftOpen(false);
+      setRightOpen(false);
+    }
+  }, []);
 
   useEffect(() => {
     const key = `codecinema:bookmarks:${storageKey ?? title ?? 'session'}`;
