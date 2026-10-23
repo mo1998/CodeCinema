@@ -7,6 +7,7 @@ import {
   FileCode2,
   Folder,
   FolderOpen,
+  Search,
 } from 'lucide-react';
 import { useEngine } from '@/lib/engine/usePlayback';
 import { useEngineState } from '@/lib/engine/usePlayback';
@@ -58,6 +59,7 @@ export function ProjectExplorer({
 
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [manual, setManual] = useState(false);
+  const [query, setQuery] = useState('');
 
   // Auto-expand the folders that contain something interesting on first paint.
   const effectiveExpanded = useMemo(() => {
@@ -65,10 +67,12 @@ export function ProjectExplorer({
     return new Set(allFolderPaths(tree));
   }, [manual, expanded, tree]);
 
-  const rows = useMemo(
-    () => flattenTree(tree, effectiveExpanded),
-    [tree, effectiveExpanded],
-  );
+  const rows = useMemo(() => {
+    const all = flattenTree(tree, effectiveExpanded);
+    const needle = query.trim().toLowerCase();
+    if (!needle) return all;
+    return all.filter((row) => row.node.path.toLowerCase().includes(needle));
+  }, [tree, effectiveExpanded, query]);
 
   const toggle = (node: TreeNode) => {
     setManual(true);
@@ -99,6 +103,17 @@ export function ProjectExplorer({
           {files.length}
         </span>
       </div>
+      <div className="shrink-0 border-b border-border px-2 py-1.5">
+        <label className="relative block">
+          <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-faint" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Find file…"
+            className="h-7 w-full rounded-sm border border-border bg-surface-2 pl-7 pr-2 text-[12px] text-text placeholder:text-faint focus:border-accent-border focus:outline-none"
+          />
+        </label>
+      </div>
       <div className="min-h-0 flex-1 overflow-y-auto pb-4">
         {rows.length === 0 ? (
           <div className="px-3 py-2 text-[11px] text-faint">No files yet</div>
@@ -110,6 +125,7 @@ export function ProjectExplorer({
             return (
               <button
                 key={node.path}
+                aria-expanded={node.type === 'folder' ? row.expanded : undefined}
                 onClick={() => open(node)}
                 className={clsx(
                   'flex h-[22px] w-full items-center gap-1.5 pr-2 text-left text-[12.5px] transition-colors',

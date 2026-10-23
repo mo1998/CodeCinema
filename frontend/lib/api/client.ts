@@ -143,6 +143,15 @@ export const api = {
 
   getSession: (id: string) => request<SessionDetail>(`/v1/sessions/${id}`),
 
+  updateSession: (id: string, body: { title?: string; visibility?: string; tags?: string[]; metadata?: Record<string, unknown> }) =>
+    request<SessionDetail>(`/v1/sessions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+
+  deleteSession: (id: string) =>
+    request<void>(`/v1/sessions/${id}`, { method: 'DELETE' }),
+
   createSession: (body: {
     title: string;
     prompt?: string;
