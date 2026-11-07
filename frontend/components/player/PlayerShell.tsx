@@ -104,7 +104,8 @@ function PlayerShellInner({
     }
 
     // Only autoplay when the viewer did not ask for a specific moment.
-    if (autoplay && !match) {
+    const hasExplicitHash = Boolean(match && Number(match[1]) > 0);
+    if (autoplay && !hasExplicitHash) {
       engine.play();
     }
     onReady?.();
