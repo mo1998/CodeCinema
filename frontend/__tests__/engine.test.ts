@@ -48,8 +48,12 @@ describe('SessionState reducer', () => {
     expect(state.fixes).toHaveLength(1);
 
     expect(state.build.status).toBe('success');
-    expect(state.narration).toHaveLength(1);
+    expect(state.narration).toHaveLength(2);
     expect(state.narration[0].text).toContain('health endpoint');
+    expect(state.narration[1]).toMatchObject({
+      category: 'summary',
+      text: 'Health endpoint added and verified.',
+    });
   });
 
   it('is a pure fold — the same events always give the same state', () => {

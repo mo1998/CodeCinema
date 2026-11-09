@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Bug,
@@ -52,7 +52,6 @@ export function TimelinePanel() {
   const engine = useEngine();
   const time = useEngineDisplay((display) => display.time);
   const [query, setQuery] = useState('');
-  const listRef = useRef<HTMLDivElement>(null);
 
   const overview = useSessionOverview();
 
@@ -67,6 +66,25 @@ export function TimelinePanel() {
         (entry.file ?? '').toLowerCase().includes(needle),
     );
   }, [overview?.timeline, query]);
+
+  // Index of the last event that has happened at the current playback time.
+  // The list scrolls to keep it visible, so the panel follows the session
+  // instead of staying pinned to the first events.
+  const currentIndex = useMemo(() => {
+    let low = 0;
+    let high = entries.length - 1;
+    let result = -1;
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      if (entries[mid].timestamp <= time) {
+        result = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    return result;
+  }, [entries, time]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -84,6 +102,7 @@ export function TimelinePanel() {
         items={entries}
         itemHeight={34}
         getKey={(entry) => String(entry.id)}
+        scrollToIndex={currentIndex >= 0 ? currentIndex : null}
         emptyState={
           <div className="px-3 py-6 text-center text-[11px] text-faint">
             {overview

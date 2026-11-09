@@ -232,6 +232,22 @@ export class SessionState {
         break;
       }
       case 'session.end': {
+        // The final summary is part of the session narrative. Surface it as a
+        // summary card unless the session already narrated the same text (the
+        // demo does, so it can hold the card on screen before the clock stops).
+        if (
+          event.summary &&
+          !this.narration.some(
+            (entry) => entry.category === 'summary' && entry.text === event.summary,
+          )
+        ) {
+          this.narration.push({
+            id: this.nextNarrationId++,
+            timestamp: ts,
+            text: event.summary,
+            category: 'summary',
+          });
+        }
         break;
       }
       case 'think': {
@@ -574,7 +590,12 @@ export class SessionState {
           detail: event.agent,
         };
       case 'session.end':
-        return { ...base, kind: 'session', label: 'Session finished' };
+        return {
+          ...base,
+          kind: 'session',
+          label: 'Session finished',
+          detail: event.summary,
+        };
       case 'think':
         return {
           ...base,
@@ -586,7 +607,12 @@ export class SessionState {
         return {
           ...base,
           kind: 'narration',
-          label: event.category === 'decision' ? 'Decision' : 'Note',
+          label:
+            event.category === 'decision'
+              ? 'Decision'
+              : event.category === 'summary'
+                ? 'Summary'
+                : 'Note',
           detail: event.text,
         };
       case 'file.create':

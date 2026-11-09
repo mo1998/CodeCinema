@@ -15,6 +15,8 @@ export interface VirtualListProps<T> {
   overscan?: number;
   /** Called when the visible range changes (used to drive scroll-into-view). */
   onRangeChange?: (start: number, end: number) => void;
+  /** Keep this item in view (used by the playback timeline). */
+  scrollToIndex?: number | null;
   emptyState?: ReactNode;
 }
 
@@ -34,6 +36,7 @@ export function VirtualList<T>({
   className,
   overscan = 8,
   onRangeChange,
+  scrollToIndex,
   emptyState,
 }: VirtualListProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -55,6 +58,21 @@ export function VirtualList<T>({
     observer.observe(el);
     return () => observer.disconnect();
   }, [measure]);
+
+  // Keep the current playback event in view without re-rendering the list on
+  // every frame. Only scroll when the target leaves the visible window.
+  useEffect(() => {
+    if (scrollToIndex == null) return;
+    const el = containerRef.current;
+    if (!el) return;
+    const top = scrollToIndex * stride;
+    const bottom = top + stride;
+    const viewTop = el.scrollTop;
+    const viewBottom = viewTop + el.clientHeight;
+    if (top < viewTop || bottom > viewBottom) {
+      el.scrollTop = Math.max(0, top - el.clientHeight / 2 + stride / 2);
+    }
+  }, [scrollToIndex, stride]);
 
   const onScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
     setScrollTop(event.currentTarget.scrollTop);

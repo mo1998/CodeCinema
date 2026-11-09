@@ -699,8 +699,12 @@ export function createDemoSession(): SessionEvent[] {
   });
 
   b.advance(800);
+  // Hold the closing summary on screen before the clock stops. Without the
+  // trailing advance the session ends on the summary event itself, so the
+  // last thing a viewer sees is the previous "booting the server" card.
+  b.narrate('Task API implemented: validation, auth and tests all green.', 'summary');
+  b.advance(2000);
   b.end('Task API implemented: validation, auth and tests all green.');
-  b.advance(1200);
 
   return b.build();
 }

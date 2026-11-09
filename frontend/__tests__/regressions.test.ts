@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PlaybackEngine } from '@/lib/engine/engine';
 import { SessionState } from '@/lib/engine/state';
+import { createDemoSession } from '@/lib/demo/session';
 import type { SessionEvent } from '@/lib/engine/events';
 
 /**
@@ -109,6 +110,61 @@ describe('regression: state converges no matter how you get there', () => {
       seeking.seek(target);
     }
     expect(seeking.getDisplay().document?.text).toBe(expected);
+  });
+});
+
+describe('regression: the end of a session is visible', () => {
+  it('surfaces the session.end summary as a summary card and timeline detail', () => {
+    const engine = new PlaybackEngine();
+    engine.setEvents([
+      { timestamp: 0, action: 'session.start', title: 'demo' },
+      { timestamp: 1000, action: 'session.end', summary: 'All done.' },
+    ]);
+    engine.seek(engine.getDuration());
+
+    const narration = engine.getState().narration;
+    expect(narration.at(-1)).toMatchObject({
+      text: 'All done.',
+      category: 'summary',
+    });
+    expect(engine.getOverview().timeline.at(-1)).toMatchObject({
+      label: 'Session finished',
+      detail: 'All done.',
+    });
+  });
+
+  it('does not duplicate a summary the session already narrated', () => {
+    const engine = new PlaybackEngine();
+    engine.setEvents([
+      { timestamp: 0, action: 'session.start', title: 'demo' },
+      {
+        timestamp: 800,
+        action: 'narrate',
+        text: 'All done.',
+        category: 'summary',
+      },
+      { timestamp: 3000, action: 'session.end', summary: 'All done.' },
+    ]);
+    engine.seek(engine.getDuration());
+
+    const summaries = engine
+      .getState()
+      .narration.filter((entry) => entry.category === 'summary');
+    expect(summaries).toHaveLength(1);
+  });
+
+  it('keeps the demo summary on screen before the clock stops', () => {
+    const engine = new PlaybackEngine();
+    engine.setEvents(createDemoSession() as SessionEvent[]);
+    const duration = engine.getDuration();
+    engine.seek(duration - 500);
+
+    const narration = engine.getState().narration;
+    expect(narration.at(-1)).toMatchObject({
+      text: 'Task API implemented: validation, auth and tests all green.',
+      category: 'summary',
+    });
+    expect(narration.at(-1)!.timestamp).toBeLessThan(duration);
   });
 });
 

@@ -125,6 +125,39 @@ def test_fold_records_narration_dependencies_and_build() -> None:
     assert state["build"]["target"] == "npm run build"
 
 
+def test_fold_surfaces_the_session_end_summary() -> None:
+    state = fold(
+        [
+            {"timestamp": 0, "action": "session.start", "title": "Demo"},
+            {"timestamp": 1000, "action": "session.end", "summary": "All done."},
+        ]
+    )
+    assert state["narration"][-1] == {
+        "id": 0,
+        "timestamp": 1000,
+        "text": "All done.",
+        "category": "summary",
+    }
+    assert state["timeline"][-1]["detail"] == "All done."
+
+
+def test_fold_does_not_duplicate_an_existing_summary() -> None:
+    state = fold(
+        [
+            {"timestamp": 0, "action": "session.start", "title": "Demo"},
+            {
+                "timestamp": 800,
+                "action": "narrate",
+                "text": "All done.",
+                "category": "summary",
+            },
+            {"timestamp": 1000, "action": "session.end", "summary": "All done."},
+        ]
+    )
+    summaries = [item for item in state["narration"] if item["category"] == "summary"]
+    assert len(summaries) == 1
+
+
 def test_fold_until_ms_stops_early() -> None:
     state = fold(FIXTURE, until_ms=700)
     assert state["consumedEvents"] == 8

@@ -143,6 +143,21 @@ class SessionState:
                 "repo": data.get("repo", self.meta.get("repo")),
                 "model": data.get("model", self.meta.get("model")),
             }
+        elif action == "session.end":
+            summary = data.get("summary")
+            if summary and not any(
+                item.get("category") == "summary" and item.get("text") == summary
+                for item in self.narration
+            ):
+                self.narration.append(
+                    {
+                        "id": self._next_narration_id,
+                        "timestamp": timestamp,
+                        "text": summary,
+                        "category": "summary",
+                    }
+                )
+                self._next_narration_id += 1
         elif action == "narrate":
             entry: dict[str, Any] = {
                 "id": self._next_narration_id,
@@ -425,11 +440,18 @@ class SessionState:
         if action == "session.start":
             return entry("session", "Session started", data.get("agent"))
         if action == "session.end":
-            return entry("session", "Session finished")
+            return entry("session", "Session finished", data.get("summary"))
         if action == "think":
             return entry("think", "Thinking", data.get("thought"))
         if action == "narrate":
-            label = "Decision" if data.get("category") == "decision" else "Note"
+            category = data.get("category")
+            label = (
+                "Decision"
+                if category == "decision"
+                else "Summary"
+                if category == "summary"
+                else "Note"
+            )
             return entry("narration", label, data.get("text"))
         if action == "file.create":
             return entry("file", "Created", data.get("file"), data.get("file"))
